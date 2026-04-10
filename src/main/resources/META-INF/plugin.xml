@@ -6,4 +6,9 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>Git4Idea</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService
+            serviceImplementation="com.github.codeplangui.settings.PluginSettings"/>
+    </extensions>
 </idea-plugin>
