@@ -6,6 +6,8 @@ import { ErrorBanner } from './components/ErrorBanner'
 import { Message, MessageBubble } from './components/MessageBubble'
 import { ProviderBar } from './components/ProviderBar'
 import { useBridge } from './hooks/useBridge'
+import { prepareSendPayload } from './sendState'
+import { BridgeStatus } from './types/bridge'
 import './App.css'
 
 export default function App() {
@@ -14,6 +16,11 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [includeContext, setIncludeContext] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<BridgeStatus>({
+    providerName: '',
+    model: '',
+    connectionState: 'unconfigured',
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -56,16 +63,16 @@ export default function App() {
     setError(message)
   }, [])
 
-  useBridge({ onStart, onToken, onEnd, onError })
+  const bridgeReady = useBridge({ onStart, onToken, onEnd, onError, onStatus: setStatus })
 
   const handleSend = () => {
-    const text = inputText.trim()
-    if (!text || isLoading) return
+    const payload = prepareSendPayload(inputText, isLoading, bridgeReady)
+    if (!payload) return
 
     const userMsgId = uuidv4()
-    setMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: text }])
+    setMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: payload.text }])
     setInputText('')
-    window.__bridge?.sendMessage(text, includeContext)
+    window.__bridge?.sendMessage(payload.text, includeContext)
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -102,7 +109,12 @@ export default function App() {
       }}
     >
       <div className="app-shell">
-        <ProviderBar onNewChat={handleNewChat} />
+        <ProviderBar
+          onNewChat={handleNewChat}
+          onOpenSettings={() => window.__bridge?.openSettings()}
+          status={status}
+          bridgeReady={bridgeReady}
+        />
 
         {error && <ErrorBanner message={error} onClose={() => setError(null)} />}
 
@@ -119,6 +131,11 @@ export default function App() {
                   当前会话支持流式输出、上下文注入和 Markdown 代码块复制。输入区支持
                   <strong> Enter 发送</strong>，<strong>Shift+Enter 换行</strong>。
                 </div>
+                {status.connectionState === 'unconfigured' && (
+                  <Button type="link" onClick={() => window.__bridge?.openSettings()}>
+                    打开 Settings 配置 Provider
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -141,7 +158,11 @@ export default function App() {
               </span>
             </div>
             <span className="context-caption">
-              {isLoading ? 'streaming response...' : 'waiting for prompt'}
+              {!bridgeReady
+                ? 'bridge connecting...'
+                : isLoading
+                  ? 'streaming response...'
+                  : status.connectionState}
             </span>
           </div>
 
@@ -162,7 +183,7 @@ export default function App() {
               type="primary"
               icon={<SendOutlined />}
               onClick={handleSend}
-              disabled={isLoading || !inputText.trim()}
+              disabled={!prepareSendPayload(inputText, isLoading, bridgeReady)}
               size="small"
               className="send-button"
             />

@@ -46,6 +46,9 @@ class ProviderDialog(
         if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
             return ValidationInfo("Endpoint 必须以 http:// 或 https:// 开头", endpointField)
         }
+        if (existing == null && normalizeApiKeyInput(String(keyField.password)) == null) {
+            return ValidationInfo("API Key 不能为空", keyField)
+        }
         if (modelField.text.isBlank()) return ValidationInfo("模型名称不能为空", modelField)
         return null
     }
@@ -57,5 +60,10 @@ class ProviderDialog(
         model = modelField.text.trim()
     )
 
-    fun getApiKey(): String = String(keyField.password)
+    fun getApiKeyOrNull(): String? = normalizeApiKeyInput(String(keyField.password))
+
+    companion object {
+        internal fun normalizeApiKeyInput(rawInput: String): String? =
+            rawInput.trim().ifBlank { null }
+    }
 }

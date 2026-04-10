@@ -31,5 +31,11 @@
                 icon="/icons/generate.svg">
             <add-to-group group-id="Vcs.MessageActionGroup" anchor="first"/>
         </action>
+
+        <action id="CodePlanGUI.AskAi"
+                class="com.github.codeplangui.action.AskAiAction"
+                text="Ask AI">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>

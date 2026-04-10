@@ -96,6 +96,17 @@ body::before {
   font-weight: 600 !important;
 }
 
+.provider-meta {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted) !important;
+}
+
+.provider-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .provider-action.ant-btn {
   color: var(--accent) !important;
   border: 1px solid var(--border-strong);

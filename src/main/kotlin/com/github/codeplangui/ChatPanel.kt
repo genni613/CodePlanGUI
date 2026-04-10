@@ -22,9 +22,8 @@ class ChatPanel(project: Project) : JPanel(BorderLayout()) {
             )
         } else {
             val browser = JBCefBrowser()
-            val chatService = ChatService(project)
+            val chatService = ChatService.getInstance(project)
             val bridge = BridgeHandler(browser, chatService)
-            chatService.bridgeHandler = bridge
 
             bridge.register()
 

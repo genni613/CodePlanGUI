@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.IOException
 import java.net.SocketTimeoutException
+import java.util.concurrent.TimeUnit
 
 class OkHttpSseClientTest {
 
@@ -119,6 +120,24 @@ class OkHttpSseClientTest {
             TestResult.Failure("连接超时（5s）：请检查 endpoint 是否可访问"),
             result
         )
+    }
+
+    @Test
+    fun `testConnection uses five second timeout budget`() {
+        var observedReadTimeout = -1
+        val syncClient = OkHttpClient.Builder()
+            .readTimeout(20, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                observedReadTimeout = chain.readTimeoutMillis()
+                responseFor(chain.request(), 200, """{"choices":[{"message":{"content":"ok"}}]}""")
+            }
+            .build()
+        val client = OkHttpSseClient(syncClient = syncClient)
+
+        val result = client.testConnection(providerConfig(), "secret-key")
+
+        assertEquals(TestResult.Success, result)
+        assertEquals(5_000, observedReadTimeout)
     }
 
     @Test

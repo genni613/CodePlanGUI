@@ -38,11 +38,11 @@ class PluginSettings : PersistentStateComponent<SettingsState> {
     override fun getState(): SettingsState = state
 
     override fun loadState(state: SettingsState) {
-        this.state = state
+        this.state = SettingsFormState.fromSettingsState(state).toSettingsState()
     }
 
     fun getActiveProvider(): ProviderConfig? =
-        state.providers.find { it.id == state.activeProviderId }
+        state.providers.find { it.id == state.activeProviderId } ?: state.providers.firstOrNull()
 
     companion object {
         fun getInstance(): PluginSettings =

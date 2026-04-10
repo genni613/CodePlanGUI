@@ -24,14 +24,40 @@ export interface Message {
   isStreaming?: boolean
 }
 
+async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // Fall through to the legacy copy path.
+    }
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+
+  try {
+    return document.execCommand('copy')
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+  const handleCopy = async () => {
+    const success = await copyText(text)
+    if (!success) return
+
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
@@ -70,8 +96,9 @@ export const MessageBubble = memo(function MessageBubble({ message }: { message:
       const button = document.createElement('button')
       button.className = 'bubble-copy-fallback'
       button.textContent = 'Copy'
-      button.onclick = () => {
-        navigator.clipboard.writeText(code.textContent || '')
+      button.onclick = async () => {
+        const success = await copyText(code.textContent || '')
+        if (!success) return
         button.textContent = 'Copied'
         window.setTimeout(() => {
           button.textContent = 'Copy'

@@ -12,16 +12,17 @@ import org.cef.browser.CefFrame
 import org.cef.handler.CefLoadHandlerAdapter
 
 @Serializable
-private data class SendMessagePayload(
-    val text: String,
-    val includeContext: Boolean = true
-)
-
-@Serializable
 private data class BridgePayload(
     val type: String,
     val text: String = "",
     val includeContext: Boolean = true
+)
+
+@Serializable
+data class BridgeStatusPayload(
+    val providerName: String = "",
+    val model: String = "",
+    val connectionState: String = "unconfigured"
 )
 
 class BridgeHandler(
@@ -30,6 +31,8 @@ class BridgeHandler(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private lateinit var sendQuery: JBCefJSQuery
+    var isReady: Boolean = false
+        private set
 
     fun register() {
         sendQuery = JBCefJSQuery.create(browser as JBCefBrowserBase)
@@ -37,11 +40,9 @@ class BridgeHandler(
             try {
                 val req = json.decodeFromString<BridgePayload>(payload)
                 when (req.type) {
-                    "sendMessage" -> {
-                        val sendMessage = json.decodeFromString<SendMessagePayload>(payload)
-                        chatService.sendMessage(sendMessage.text, sendMessage.includeContext)
-                    }
+                    "sendMessage" -> chatService.sendMessage(req.text, req.includeContext)
                     "newChat" -> chatService.newChat()
+                    "openSettings" -> chatService.openSettings()
                 }
             } catch (_: Exception) {
                 // Ignore malformed bridge payloads.
@@ -52,22 +53,29 @@ class BridgeHandler(
         browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
             override fun onLoadEnd(browser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
                 if (frame.isMain) {
+                    isReady = true
                     val js = """
                         window.__bridge = {
+                            isReady: true,
                             sendMessage: function(text, includeContext) {
                                 ${sendQuery.inject("""JSON.stringify({type:'sendMessage',text:text,includeContext:!!includeContext})""")}
                             },
                             newChat: function() {
                                 ${sendQuery.inject("""JSON.stringify({type:'newChat',text:''})""")}
                             },
+                            openSettings: function() {
+                                ${sendQuery.inject("""JSON.stringify({type:'openSettings',text:''})""")}
+                            },
                             onStart: function(msgId) {},
                             onToken: function(token) {},
                             onEnd: function(msgId) {},
-                            onError: function(message) {}
+                            onError: function(message) {},
+                            onStatus: function(status) {}
                         };
                         document.dispatchEvent(new Event('bridge_ready'));
                     """.trimIndent()
                     browser.executeJavaScript(js, "", 0)
+                    chatService.attachBridge(this@BridgeHandler)
                 }
             }
         }, browser.cefBrowser)
@@ -81,7 +89,11 @@ class BridgeHandler(
 
     fun notifyError(message: String) = pushJS("window.__bridge.onError(${json.encodeToString(message)})")
 
+    fun notifyStatus(status: BridgeStatusPayload) =
+        pushJS("window.__bridge.onStatus(${json.encodeToString(status)})")
+
     private fun pushJS(js: String) {
+        if (!isReady) return
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(js, "", 0)
         }

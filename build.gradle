@@ -48,9 +48,19 @@ test {
     useJUnitPlatform()
 }
 
+tasks.register('installWebviewDependencies', Exec) {
+    workingDir 'webview'
+    commandLine 'npm', 'ci'
+    inputs.file('webview/package.json')
+    inputs.file('webview/package-lock.json')
+    outputs.dir('webview/node_modules')
+}
+
 tasks.register('buildWebview', Exec) {
+    dependsOn 'installWebviewDependencies'
     workingDir 'webview'
     commandLine 'npm', 'run', 'build'
+    inputs.file('webview/index.html')
     inputs.dir('webview/src')
     inputs.file('webview/package.json')
     inputs.file('webview/package-lock.json')

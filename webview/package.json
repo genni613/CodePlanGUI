@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "tsc -p tsconfig.test.json && node --test test/sendState.test.mjs",
     "postbuild": "node scripts/copy-dist.mjs",
     "preview": "vite preview"
   },

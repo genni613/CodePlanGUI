@@ -39,6 +39,10 @@ class GenerateCommitMessageAction : AnAction() {
             return
         }
         val apiKey = ApiKeyStore.load(provider.id) ?: ""
+        if (apiKey.isBlank()) {
+            Messages.showErrorDialog(project, "当前 Provider 尚未配置 API Key", "CodePlanGUI")
+            return
+        }
         val settings = PluginSettings.getInstance().getState()
 
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, "生成 Commit Message...") {
@@ -52,7 +56,7 @@ class GenerateCommitMessageAction : AnAction() {
                     return
                 }
 
-                val systemPrompt = CommitPromptBuilder.buildSystemPrompt(settings.commitLanguage)
+                val systemPrompt = CommitPromptBuilder.buildSystemPrompt(settings.commitLanguage, settings.commitFormat)
                 val userMessage = CommitPromptBuilder.buildUserMessage(diff, settings.commitLanguage)
                 val messages = listOf(
                     Message(MessageRole.SYSTEM, systemPrompt),

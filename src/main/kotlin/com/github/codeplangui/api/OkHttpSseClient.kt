@@ -43,6 +43,10 @@ class OkHttpSseClient(
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build(),
+    private val testClient: OkHttpClient = syncClient.newBuilder()
+        .readTimeout(5, TimeUnit.SECONDS)
+        .callTimeout(5, TimeUnit.SECONDS)
+        .build(),
     private val json: Json = Json { ignoreUnknownKeys = true },
     private val eventSourceFactory: EventSource.Factory = EventSources.createFactory(streamClient)
 ) {
@@ -117,7 +121,7 @@ class OkHttpSseClient(
         val testMessages = listOf(Message(MessageRole.USER, "hi"))
         val request = buildRequest(config, apiKey, testMessages, 0.0, 1, false)
         return try {
-            syncClient.newCall(request).execute().use { response ->
+            testClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) TestResult.Success
                 else TestResult.Failure("HTTP ${response.code}: ${response.body?.string()?.take(200)}")
             }
