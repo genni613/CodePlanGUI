@@ -37,7 +37,6 @@ dependencies {
 
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.squareup.okhttp3:okhttp-sse:4.12.0'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
@@ -47,6 +46,30 @@ dependencies {
 
 test {
     useJUnitPlatform()
+}
+
+tasks.register('installWebviewDependencies', Exec) {
+    workingDir 'webview'
+    commandLine 'npm', 'ci'
+    inputs.file('webview/package.json')
+    inputs.file('webview/package-lock.json')
+    outputs.dir('webview/node_modules')
+}
+
+tasks.register('buildWebview', Exec) {
+    dependsOn 'installWebviewDependencies'
+    workingDir 'webview'
+    commandLine 'npm', 'run', 'build'
+    inputs.file('webview/index.html')
+    inputs.dir('webview/src')
+    inputs.file('webview/package.json')
+    inputs.file('webview/package-lock.json')
+    inputs.file('webview/vite.config.ts')
+    outputs.file('src/main/resources/webview/index.html')
+}
+
+tasks.named('processResources').configure {
+    dependsOn 'buildWebview'
 }
 
 intellijPlatform {

@@ -3,3 +3,8 @@
 .intellijPlatform/
 build/
 .worktrees/
+webview/node_modules/
+webview/dist/
+*.class
+.DS_Store
+local.properties
