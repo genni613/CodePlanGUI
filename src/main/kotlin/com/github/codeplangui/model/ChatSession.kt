@@ -14,6 +14,11 @@ class ChatSession {
         return system + history
     }
 
+    fun setSystemMessage(content: String) {
+        messages.removeAll { it.role == MessageRole.SYSTEM }
+        messages.add(0, Message(MessageRole.SYSTEM, content))
+    }
+
     fun clear() {
         messages.clear()
     }

@@ -20,12 +20,15 @@ class ChatService(private val project: Project) {
     private val client = OkHttpSseClient()
     private val session = ChatSession()
     private var activeStream: EventSource? = null
+    private var activeMessageId: String? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     var bridgeHandler: BridgeHandler? = null
 
     fun sendMessage(text: String, includeContext: Boolean) {
         activeStream?.cancel()
+        activeStream = null
+        activeMessageId = null
 
         val settings = PluginSettings.getInstance()
         val provider = settings.getActiveProvider()
@@ -41,16 +44,11 @@ class ChatService(private val project: Project) {
         }
 
         val systemContent = buildSystemContent(includeContext)
-        val systemMessages = if (session.getApiMessages().none { it.role == MessageRole.SYSTEM }) {
-            listOf(Message(MessageRole.SYSTEM, systemContent))
-        } else {
-            emptyList()
-        }
-        systemMessages.forEach { session.add(it) }
-
+        session.setSystemMessage(systemContent)
         session.add(Message(MessageRole.USER, text))
 
         val msgId = UUID.randomUUID().toString()
+        activeMessageId = msgId
         val request = client.buildRequest(
             config = provider,
             apiKey = apiKey,
@@ -64,28 +62,42 @@ class ChatService(private val project: Project) {
 
         val responseBuffer = StringBuilder()
         scope.launch {
-            activeStream = client.streamChat(
+            val stream = client.streamChat(
                 request = request,
                 onToken = { token ->
-                    responseBuffer.append(token)
-                    bridgeHandler?.notifyToken(token)
+                    if (activeMessageId == msgId) {
+                        responseBuffer.append(token)
+                        bridgeHandler?.notifyToken(token)
+                    }
                 },
                 onEnd = {
-                    session.add(Message(MessageRole.ASSISTANT, responseBuffer.toString()))
-                    activeStream = null
-                    bridgeHandler?.notifyEnd(msgId)
+                    if (activeMessageId == msgId) {
+                        session.add(Message(MessageRole.ASSISTANT, responseBuffer.toString()))
+                        activeStream = null
+                        activeMessageId = null
+                        bridgeHandler?.notifyEnd(msgId)
+                    }
                 },
                 onError = { message ->
-                    activeStream = null
-                    bridgeHandler?.notifyError(message)
+                    if (activeMessageId == msgId) {
+                        activeStream = null
+                        activeMessageId = null
+                        bridgeHandler?.notifyError(message)
+                    }
                 }
             )
+            if (activeMessageId == msgId) {
+                activeStream = stream
+            } else {
+                stream.cancel()
+            }
         }
     }
 
     fun newChat() {
         activeStream?.cancel()
         activeStream = null
+        activeMessageId = null
         session.clear()
     }
 

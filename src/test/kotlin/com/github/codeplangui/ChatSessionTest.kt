@@ -47,4 +47,18 @@ class ChatSessionTest {
         session.clear()
         assertEquals(0, session.getApiMessages().size)
     }
+
+    @Test
+    fun `setSystemMessage replaces existing system prompt and keeps history`() {
+        val session = ChatSession()
+        session.setSystemMessage("system prompt 1")
+        session.add(Message(MessageRole.USER, "hello"))
+        session.setSystemMessage("system prompt 2")
+
+        val msgs = session.getApiMessages()
+        assertEquals(2, msgs.size)
+        assertEquals(MessageRole.SYSTEM, msgs[0].role)
+        assertEquals("system prompt 2", msgs[0].content)
+        assertEquals("hello", msgs[1].content)
+    }
 }
