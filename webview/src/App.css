@@ -110,15 +110,6 @@ body::before {
   position: relative;
 }
 
-.app-shell::after {
-  content: '';
-  position: absolute;
-  inset: 10px;
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  pointer-events: none;
-}
-
 .provider-bar {
   display: flex;
   align-items: flex-start;

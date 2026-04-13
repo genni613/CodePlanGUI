@@ -83,24 +83,88 @@ build/distributions/CodePlanGUI-0.1.0.zip
 JAVA_HOME=/path/to/jdk17 ./gradlew buildWebview runIde
 ```
 
+### Roadmap Principles
+
+- Build trust in the current surface before expanding it.
+- Make state, errors, and permissions explicit before adding more automation.
+- Ship IDE-native actions only when they are testable, reversible, and easy to diagnose.
+- Keep the README aligned with real behavior; future capabilities stay clearly marked as future.
+
 ### Roadmap
 
-**P0 — Current (MVP)**
-- [x] API Provider configuration with Test Connection
-- [x] Streaming Chat sidebar (JCEF + React frontend)
-- [x] Context injection (current file / selection)
-- [x] Commit Message generation from staged diff
+**Phase 1 — Trustworthy Chat Foundation**
 
-**P1 — Next**
-- [ ] Inline code completion (debounced 300ms, IDEA Lookup/Inlay)
-- [ ] Conversation history (local persistence + search)
-- [ ] One-click code insertion from Chat reply into editor
-- [ ] Quick provider switch from status bar
+User-visible outcomes:
+- Stable Chat, Ask AI, context injection, commit message generation, and theme sync
+- Clear status and error messages for provider, API key, network, and context problems
+- Honest capability boundaries: the assistant must not pretend it executed commands or inspected local files
 
-**P2 — Future**
-- [ ] MCP server support
-- [ ] Agent mode + slash command system
-- [ ] Token usage and cost estimation
+Engineering foundations:
+- Unified bridge lifecycle for `ready`, `status`, `theme`, and `context` events
+- Structured error handling across plugin, webview, and provider calls
+- Regression coverage for chat, selection flow, settings persistence, and commit generation
+
+Acceptance:
+- No silent failure in the main chat flows
+- Errors distinguish configuration issues from runtime failures
+- UI state remains correct after reload, theme switch, and provider change
+
+**Phase 2 — IDE-Native Productivity**
+
+User-visible outcomes:
+- Conversation history with restore and search
+- One-click code insertion from chat with predictable undo behavior
+- Better commit message generation based on the actual selected commit scope
+- Faster provider switching from the IDE surface
+
+Engineering foundations:
+- Local session persistence and retrieval model
+- Shared context-summary pipeline for file, selection, and commit-change scopes
+- Reusable action entry points shared by tool window, editor actions, and commit UI
+
+Acceptance:
+- Users can restore previous conversations reliably
+- Commit generation reflects the selected change scope instead of a generic diff
+- Code insertion and provider switching behave consistently across IDE restarts
+
+**Phase 3 — Safe Action Surfaces**
+
+User-visible outcomes:
+- Controlled command execution from the chat surface
+- Permission prompts and clear execution result cards
+- Auditable summaries of what ran, why it ran, and what happened
+
+Engineering foundations:
+- Tool invocation protocol between webview, plugin host, and execution runtime
+- Permission model, timeout handling, and structured result payloads
+- Runtime classification for execution, network, permission, and sandbox failures
+
+Acceptance:
+- No command runs without explicit authorization
+- Every execution shows source, status, and output summary
+- Tool failures are reported as structured errors instead of vague assistant prose
+
+**Phase 4 — Agent and MCP Expansion**
+
+User-visible outcomes:
+- MCP server integration
+- Agent mode and slash commands for multi-step workflows
+- Token usage and cost visibility
+
+Engineering foundations:
+- Lifecycle management for MCP servers and agent sessions
+- Structured event and state model for long-running tasks
+- Health checks, degraded-mode reporting, and recovery hooks
+
+Acceptance:
+- MCP and agent failures are diagnosable without reading raw logs
+- Long-running actions expose explicit status transitions
+- New automation surfaces reuse the permission and event model established earlier
+
+**Explicitly not available today:**
+- Command execution from chat
+- Agent mode or slash commands
+- Cloud account sync or a hosted backend service
 
 **Not planned:**
 - Account / cloud sync (local keys only, zero server)
@@ -188,24 +252,88 @@ build/distributions/CodePlanGUI-0.1.0.zip
 JAVA_HOME=/path/to/jdk17 ./gradlew buildWebview runIde
 ```
 
+### 路线原则
+
+- 先把现有能力做可信，再扩展能力边界。
+- 先把状态、错误和权限说清楚，再引入更强的自动化。
+- 只有可测试、可撤销、可诊断的 IDE 动作才进入正式功能面。
+- README 只写真实能力和有明确验收标准的规划，不提前夸大。
+
 ### 迭代计划
 
-**P0 — 当前（MVP）**
-- [x] API Provider 配置 + 连接测试
-- [x] 流式 Chat 侧边栏（JCEF + React 前端）
-- [x] 上下文注入（当前文件 / 选中内容）
-- [x] Commit Message 生成
+**Phase 1 — 可信的 Chat 基础层**
 
-**P1 — 下一版本**
-- [ ] Inline 代码补全（防抖 300ms，接入 IDEA Lookup/Inlay）
-- [ ] 会话历史（本地持久化 + 搜索）
-- [ ] 一键将 Chat 回答中的代码插入光标位置
-- [ ] 状态栏快速切换 Provider
+用户可见结果：
+- Chat、Ask AI、上下文注入、Commit Message 生成和主题同步稳定可用
+- Provider、API Key、网络、上下文异常都有明确状态和错误提示
+- 助手不会再伪装自己执行过命令或读取过本地文件
 
-**P2 — 远期**
-- [ ] MCP server 支持
-- [ ] Agent 模式 + slash command
-- [ ] token 用量与预估费用统计
+工程支撑：
+- 统一 `ready`、`status`、`theme`、`context` 的 bridge 生命周期
+- 插件、webview、Provider 请求链路的错误分类和兜底
+- 为聊天、选中代码、设置持久化、commit 生成补齐回归测试
+
+验收标准：
+- 主聊天链路不再出现静默失败
+- 错误能区分配置问题和运行时问题
+- Reload、主题切换、Provider 切换后 UI 状态仍与真实状态一致
+
+**Phase 2 — IDE 原生提效层**
+
+用户可见结果：
+- 会话历史与恢复、搜索
+- 一键把 Chat 中的代码插入编辑器，并且撤销行为可预期
+- Commit Message 生成基于实际选中的提交范围，而不是泛化 diff
+- 更快的 Provider 切换入口
+
+工程支撑：
+- 本地会话持久化与恢复模型
+- 面向文件、选区、提交变更范围的统一上下文摘要能力
+- Tool Window、编辑器动作、提交面板复用同一套动作入口
+
+验收标准：
+- 用户能稳定恢复历史会话
+- Commit Message 与实际勾选变更范围一致
+- 代码插入和 Provider 切换在 IDE 重启后仍保持一致行为
+
+**Phase 3 — 安全执行能力层**
+
+用户可见结果：
+- 受控的命令执行入口
+- 清晰的权限确认和执行结果卡片
+- 用户能看到“执行了什么、为什么执行、结果如何”的摘要
+
+工程支撑：
+- webview、插件宿主、执行运行时之间的工具调用协议
+- 权限模型、超时控制、结构化结果回传
+- 对执行失败、网络失败、权限失败、沙箱失败做运行时分类
+
+验收标准：
+- 未经明确授权不得执行命令
+- 每次执行都展示来源、状态和输出摘要
+- 工具失败以结构化错误呈现，而不是模糊的 AI 文本描述
+
+**Phase 4 — Agent 与 MCP 扩展层**
+
+用户可见结果：
+- MCP Server 集成
+- Agent 模式与 slash command 多步骤工作流
+- token 用量与成本可见性
+
+工程支撑：
+- MCP Server 与 Agent Session 生命周期管理
+- 长任务的结构化事件流和状态模型
+- 健康检查、降级模式报告和恢复钩子
+
+验收标准：
+- MCP 和 Agent 失败无需读原始日志也能定位
+- 长任务具备明确的状态流转
+- 新自动化能力复用前面已经建立的权限和事件模型
+
+**当前明确不具备：**
+- 在 Chat 中直接执行命令
+- Agent 模式或 slash command
+- 云端账号体系或托管后端服务
 
 **不做：**
 - 账号体系 / 云端同步（始终本地 key，零服务器）
