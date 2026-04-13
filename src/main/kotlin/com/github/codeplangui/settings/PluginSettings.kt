@@ -24,7 +24,13 @@ data class SettingsState(
     var commitLanguage: String = "zh",
     var commitFormat: String = "conventional",
     var contextInjectionEnabled: Boolean = true,
-    var contextMaxLines: Int = 300
+    var contextMaxLines: Int = 300,
+    var commandExecutionEnabled: Boolean = false,
+    var commandWhitelist: MutableList<String> = mutableListOf(
+        "cargo", "gradle", "mvn", "npm", "yarn", "pnpm",
+        "git", "ls", "cat", "grep", "find", "echo", "pwd"
+    ),
+    var commandTimeoutSeconds: Int = 30
 )
 
 @State(

@@ -8,7 +8,13 @@ data class SettingsFormState(
     var commitLanguage: String = "zh",
     var commitFormat: String = "conventional",
     var contextInjectionEnabled: Boolean = true,
-    var contextMaxLines: Int = 300
+    var contextMaxLines: Int = 300,
+    var commandExecutionEnabled: Boolean = false,
+    var commandWhitelist: MutableList<String> = mutableListOf(
+        "cargo", "gradle", "mvn", "npm", "yarn", "pnpm",
+        "git", "ls", "cat", "grep", "find", "echo", "pwd"
+    ),
+    var commandTimeoutSeconds: Int = 30
 ) {
     fun toSettingsState(): SettingsState = SettingsState(
         providers = providers.toMutableList(),
@@ -18,7 +24,10 @@ data class SettingsFormState(
         commitLanguage = commitLanguage,
         commitFormat = commitFormat,
         contextInjectionEnabled = contextInjectionEnabled,
-        contextMaxLines = contextMaxLines
+        contextMaxLines = contextMaxLines,
+        commandExecutionEnabled = commandExecutionEnabled,
+        commandWhitelist = commandWhitelist.toMutableList(),
+        commandTimeoutSeconds = commandTimeoutSeconds,
     )
 
     companion object {
@@ -30,7 +39,10 @@ data class SettingsFormState(
             commitLanguage = state.commitLanguage,
             commitFormat = state.commitFormat,
             contextInjectionEnabled = state.contextInjectionEnabled,
-            contextMaxLines = state.contextMaxLines
+            contextMaxLines = state.contextMaxLines,
+            commandExecutionEnabled = state.commandExecutionEnabled,
+            commandWhitelist = state.commandWhitelist.toMutableList(),
+            commandTimeoutSeconds = state.commandTimeoutSeconds,
         )
     }
 }

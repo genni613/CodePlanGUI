@@ -2,6 +2,7 @@ package com.github.codeplangui
 
 import com.github.codeplangui.settings.ProviderConfig
 import com.github.codeplangui.settings.SettingsFormState
+import com.github.codeplangui.settings.SettingsState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -50,5 +51,19 @@ class SettingsFormStateTest {
         ).toSettingsState()
 
         assertNull(state.activeProviderId)
+    }
+
+    @Test
+    fun `command execution fields round-trip through SettingsFormState`() {
+        val state = SettingsState(
+            commandExecutionEnabled = true,
+            commandWhitelist = mutableListOf("cargo", "git"),
+            commandTimeoutSeconds = 45
+        )
+        val form = SettingsFormState.fromSettingsState(state)
+        val roundTripped = form.toSettingsState()
+        assertEquals(true, roundTripped.commandExecutionEnabled)
+        assertEquals(listOf("cargo", "git"), roundTripped.commandWhitelist)
+        assertEquals(45, roundTripped.commandTimeoutSeconds)
     }
 }
