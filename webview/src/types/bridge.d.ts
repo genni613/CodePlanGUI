@@ -21,6 +21,7 @@ export interface Bridge {
   sendMessage: (text: string, includeContext: boolean) => void
   newChat: () => void
   openSettings: () => void
+  cancelStream: () => void
   frontendReady: () => void
   debugLog: (text: string) => void
   onStart: (msgId: string) => void

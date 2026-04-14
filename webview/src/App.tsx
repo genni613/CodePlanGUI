@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { SendOutlined } from '@ant-design/icons'
+import { BorderOutlined, SendOutlined } from '@ant-design/icons'
 import { Button, ConfigProvider, Switch, Tooltip, Typography, theme as antdTheme } from 'antd'
 import { v4 as uuidv4 } from 'uuid'
 import { ApprovalDialog } from './components/ApprovalDialog'
@@ -221,6 +221,23 @@ export default function App() {
     window.__bridge?.newChat()
   }
 
+  const handleCancel = useCallback(() => {
+    if (!isLoading) return
+    window.__bridge?.cancelStream()
+  }, [isLoading])
+
+  // ESC key to cancel streaming
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isLoading) {
+        e.preventDefault()
+        window.__bridge?.cancelStream()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [isLoading])
+
   const adjustTextareaHeight = (element: HTMLTextAreaElement) => {
     element.style.height = 'auto'
     element.style.height = `${Math.min(element.scrollHeight, 120)}px`
@@ -317,10 +334,10 @@ export default function App() {
             />
             <Button
               type="primary"
-              icon={<SendOutlined />}
-              onClick={handleSend}
-              disabled={!composerReadiness.canSend}
-              title={composerReadiness.reason ?? 'Send'}
+              icon={isLoading ? <BorderOutlined /> : <SendOutlined />}
+              onClick={isLoading ? handleCancel : handleSend}
+              disabled={!isLoading && !composerReadiness.canSend}
+              title={isLoading ? '停止生成 (Esc)' : (composerReadiness.reason ?? 'Send')}
               size="small"
               className="send-button"
             />

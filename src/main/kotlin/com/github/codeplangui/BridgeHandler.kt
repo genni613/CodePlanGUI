@@ -28,6 +28,7 @@ internal interface BridgeCommands {
     fun onFrontendReady()
     fun approvalResponse(requestId: String, decision: String)
     fun debugLog(text: String)
+    fun cancelStream()
 }
 
 internal fun dispatchBridgeRequest(
@@ -45,6 +46,7 @@ internal fun dispatchBridgeRequest(
         "frontendReady"    -> commands.onFrontendReady()
         "approvalResponse" -> commands.approvalResponse(requestId, decision)
         "debugLog"         -> commands.debugLog(text)
+        "cancelStream"     -> commands.cancelStream()
     }
 }
 
@@ -121,6 +123,10 @@ class BridgeHandler(
                     override fun debugLog(text: String) {
                         logger.info("[CodePlanGUI Frontend] $text")
                     }
+
+                    override fun cancelStream() {
+                        chatService.cancelStream()
+                    }
                 })) {
                 BridgePayloadHandlingResult.Success -> null
                 BridgePayloadHandlingResult.MalformedPayload -> {
@@ -151,6 +157,9 @@ class BridgeHandler(
                             },
                             openSettings: function() {
                                 ${sendQuery.inject("""JSON.stringify({type:'openSettings',text:''})""")}
+                            },
+                            cancelStream: function() {
+                                ${sendQuery.inject("""JSON.stringify({type:'cancelStream',text:''})""")}
                             },
                             frontendReady: function() {
                                 ${sendQuery.inject("""JSON.stringify({type:'frontendReady',text:''})""")}
