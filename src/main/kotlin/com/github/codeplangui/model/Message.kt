@@ -2,6 +2,7 @@ package com.github.codeplangui.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.util.UUID
 
 enum class MessageRole {
     @SerialName("system")
@@ -17,5 +18,7 @@ enum class MessageRole {
 @Serializable
 data class Message(
     val role: MessageRole,
-    val content: String
+    val content: String,
+    val id: String = UUID.randomUUID().toString(),
+    val seq: Int = 0
 )

@@ -8,7 +8,8 @@ data class SettingsFormState(
     var commitLanguage: String = "zh",
     var commitFormat: String = "conventional",
     var contextInjectionEnabled: Boolean = true,
-    var contextMaxLines: Int = 300
+    var contextMaxLines: Int = 300,
+    var memoryText: String = ""
 ) {
     fun toSettingsState(): SettingsState = SettingsState(
         providers = providers.toMutableList(),
@@ -18,7 +19,8 @@ data class SettingsFormState(
         commitLanguage = commitLanguage,
         commitFormat = commitFormat,
         contextInjectionEnabled = contextInjectionEnabled,
-        contextMaxLines = contextMaxLines
+        contextMaxLines = contextMaxLines,
+        memoryText = memoryText
     )
 
     companion object {
@@ -30,7 +32,8 @@ data class SettingsFormState(
             commitLanguage = state.commitLanguage,
             commitFormat = state.commitFormat,
             contextInjectionEnabled = state.contextInjectionEnabled,
-            contextMaxLines = state.contextMaxLines
+            contextMaxLines = state.contextMaxLines,
+            memoryText = state.memoryText
         )
     }
 }

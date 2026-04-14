@@ -18,6 +18,7 @@ export interface Bridge {
   onStatus: (status: BridgeStatus) => void
   onContextFile: (fileName: string) => void
   onTheme: (theme: 'dark' | 'light') => void
+  onRestoreMessages: (messages: string) => void
 }
 
 declare global {

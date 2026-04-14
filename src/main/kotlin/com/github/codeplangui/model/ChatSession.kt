@@ -1,11 +1,15 @@
 package com.github.codeplangui.model
 
-class ChatSession {
+import java.util.UUID
+
+class ChatSession(val threadId: String = UUID.randomUUID().toString()) {
     private val messages = mutableListOf<Message>()
 
     fun add(msg: Message) {
         messages.add(msg)
     }
+
+    fun getMessages(): List<Message> = messages.toList()
 
     /** Returns system messages + last 40 non-system messages. */
     fun getApiMessages(): List<Message> {
@@ -22,4 +26,6 @@ class ChatSession {
     fun clear() {
         messages.clear()
     }
+
+    fun nextSeq(): Int = messages.filter { it.role != MessageRole.SYSTEM }.size
 }

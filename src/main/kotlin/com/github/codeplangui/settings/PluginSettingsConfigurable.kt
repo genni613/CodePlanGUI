@@ -30,7 +30,9 @@ import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.JRadioButton
 import javax.swing.JSpinner
+import javax.swing.JTextArea
 import javax.swing.SpinnerNumberModel
+import javax.swing.JScrollPane
 import javax.swing.JTable
 import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
@@ -48,6 +50,7 @@ class PluginSettingsConfigurable : Configurable {
     private lateinit var commitLanguageEn: JRadioButton
     private lateinit var commitFormatConventional: JRadioButton
     private lateinit var commitFormatFreeform: JRadioButton
+    private lateinit var memoryTextArea: JTextArea
     private val client = OkHttpSseClient()
     private val pendingApiKeyUpdates = linkedMapOf<String, String?>()
 
@@ -181,6 +184,11 @@ class PluginSettingsConfigurable : Configurable {
             add(commitFormatFreeform)
         }
 
+        memoryTextArea = JTextArea(settings.memoryText, 5, 40).apply {
+            lineWrap = true
+            wrapStyleWord = true
+        }
+
         val chatCommitPanel = FormBuilder.createFormBuilder()
             .addLabeledComponent("Temperature:", temperatureSpinner)
             .addLabeledComponent("Max Tokens:", maxTokensSpinner)
@@ -199,6 +207,10 @@ class PluginSettingsConfigurable : Configurable {
                     add(commitFormatConventional)
                     add(commitFormatFreeform)
                 }
+            )
+            .addLabeledComponent(
+                JBLabel("AI 记忆（注入所有对话的系统提示词）:"),
+                JScrollPane(memoryTextArea)
             )
             .panel
 
@@ -253,6 +265,7 @@ class PluginSettingsConfigurable : Configurable {
         commitLanguageEn.isSelected = settings.commitLanguage == "en"
         commitFormatConventional.isSelected = settings.commitFormat == "conventional"
         commitFormatFreeform.isSelected = settings.commitFormat == "freeform"
+        memoryTextArea.text = settings.memoryText
         pendingApiKeyUpdates.clear()
     }
 
@@ -268,7 +281,8 @@ class PluginSettingsConfigurable : Configurable {
         commitLanguage = if (commitLanguageEn.isSelected) "en" else "zh",
         commitFormat = if (commitFormatFreeform.isSelected) "freeform" else "conventional",
         contextInjectionEnabled = contextInjectionCheckbox.isSelected,
-        contextMaxLines = (contextMaxLinesSpinner.value as Number).toInt()
+        contextMaxLines = (contextMaxLinesSpinner.value as Number).toInt(),
+        memoryText = memoryTextArea.text
     )
 
     private fun selectedProviderId(): String? =

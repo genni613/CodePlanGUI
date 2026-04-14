@@ -144,7 +144,8 @@ class BridgeHandler(
                             onError: function(message) {},
                             onStatus: function(status) {},
                             onContextFile: function(fileName) {},
-                            onTheme: function(theme) {}
+                            onTheme: function(theme) {},
+                            onRestoreMessages: function(messages) {}
                         };
                         document.dispatchEvent(new Event('bridge_ready'));
                     """.trimIndent()
@@ -170,6 +171,9 @@ class BridgeHandler(
 
     fun notifyTheme(theme: String) =
         pushJS("window.__bridge.onTheme(${json.encodeToString(theme)})")
+
+    fun notifyRestoreMessages(messages: String) =
+        pushJS("window.__bridge.onRestoreMessages(${json.encodeToString(messages)})")
 
     private fun pushJS(js: String) {
         if (!isReady) return

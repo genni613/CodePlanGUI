@@ -24,7 +24,8 @@ data class SettingsState(
     var commitLanguage: String = "zh",
     var commitFormat: String = "conventional",
     var contextInjectionEnabled: Boolean = true,
-    var contextMaxLines: Int = 300
+    var contextMaxLines: Int = 300,
+    var memoryText: String = ""
 )
 
 @State(

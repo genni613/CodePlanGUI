@@ -87,10 +87,24 @@ export default function App() {
     setStatus(prev => applyBridgeStatus(prev, nextStatus))
   }, [])
 
+  const onRestoreMessages = useCallback((messagesJson: string) => {
+    try {
+      const restored = JSON.parse(messagesJson) as Array<{ id: string; role: string; content: string }>
+      setMessages(restored.map(m => ({
+        id: m.id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        isStreaming: false,
+      })))
+    } catch {
+      // ignore malformed restore data
+    }
+  }, [])
+
   // Build theme algorithm for Ant Design
   const themeAlgorithm = themeMode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm
 
-  const bridgeReady = useBridge({ onStart, onToken, onEnd, onError, onStatus, onContextFile, onTheme })
+  const bridgeReady = useBridge({ onStart, onToken, onEnd, onError, onStatus, onContextFile, onTheme, onRestoreMessages })
   const composerReadiness = getComposerReadiness({
     inputText,
     isLoading,

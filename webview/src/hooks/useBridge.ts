@@ -9,6 +9,7 @@ interface BridgeCallbacks {
   onStatus: (status: BridgeStatus) => void
   onContextFile: (fileName: string) => void
   onTheme: (theme: 'dark' | 'light') => void
+  onRestoreMessages: (messages: string) => void
 }
 
 export function useBridge(callbacks: BridgeCallbacks) {
@@ -29,6 +30,7 @@ export function useBridge(callbacks: BridgeCallbacks) {
     window.__bridge.onStatus = callbacks.onStatus
     window.__bridge.onContextFile = callbacks.onContextFile
     window.__bridge.onTheme = callbacks.onTheme
+    window.__bridge.onRestoreMessages = callbacks.onRestoreMessages
   }, [callbacks])
 
   useEffect(() => {
@@ -48,6 +50,7 @@ export function useBridge(callbacks: BridgeCallbacks) {
           onStatus: currentCallbacks.onStatus,
           onContextFile: currentCallbacks.onContextFile,
           onTheme: currentCallbacks.onTheme,
+          onRestoreMessages: currentCallbacks.onRestoreMessages,
         }
       } else {
         window.__bridge.onStart = currentCallbacks.onStart
@@ -57,6 +60,7 @@ export function useBridge(callbacks: BridgeCallbacks) {
         window.__bridge.onStatus = currentCallbacks.onStatus
         window.__bridge.onContextFile = currentCallbacks.onContextFile
         window.__bridge.onTheme = currentCallbacks.onTheme
+        window.__bridge.onRestoreMessages = currentCallbacks.onRestoreMessages
       }
 
       const isReady = window.__bridge.isReady === true

@@ -7,6 +7,7 @@ import com.github.codeplangui.model.MessageRole
 import com.github.codeplangui.settings.ApiKeyStore
 import com.github.codeplangui.settings.PluginSettings
 import com.github.codeplangui.settings.PluginSettingsConfigurable
+import com.github.codeplangui.storage.SessionStore
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.Disposable
@@ -26,7 +27,7 @@ import java.util.UUID
 class ChatService(private val project: Project) : Disposable {
 
     private val client = OkHttpSseClient()
-    private val session = ChatSession()
+    private var session: ChatSession = ChatSession()
     private var activeStream: EventSource? = null
     private var activeMessageId: String? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -34,6 +35,8 @@ class ChatService(private val project: Project) : Disposable {
 
     var bridgeHandler: BridgeHandler? = null
         private set
+
+    private val sessionStore = SessionStore()
 
     private var contextFileCallback: ((String) -> Unit)? = null
     private var onFrontendReadyCallback: (() -> Unit)? = null
@@ -47,6 +50,7 @@ class ChatService(private val project: Project) : Disposable {
     fun onFrontendReady() {
         isFrontendReady = true
         publishStatus()
+        restoreSessionIfNeeded()
         onFrontendReadyCallback?.invoke()
         pendingPrompt?.let { prompt ->
             pendingPrompt = null
@@ -90,10 +94,13 @@ class ChatService(private val project: Project) : Disposable {
         contextFileCallback?.invoke(resolveUiContextLabel(contextLabelOverride, contextSnapshot))
         val systemContent = formatSystemContent(
             base = buildBaseSystemPrompt(),
-            snapshot = contextSnapshot
+            snapshot = contextSnapshot,
+            memoryText = settings.getState().memoryText
         )
         session.setSystemMessage(systemContent)
-        session.add(Message(MessageRole.USER, text))
+        val userMsg = Message(MessageRole.USER, text, UUID.randomUUID().toString(), session.nextSeq())
+        session.add(userMsg)
+        sessionStore.saveSession(session.threadId, session.getMessages().filter { it.role != MessageRole.SYSTEM })
 
         val msgId = UUID.randomUUID().toString()
         activeMessageId = msgId
@@ -121,7 +128,8 @@ class ChatService(private val project: Project) : Disposable {
                 },
                 onEnd = {
                     if (activeMessageId == msgId) {
-                        session.add(Message(MessageRole.ASSISTANT, responseBuffer.toString()))
+                        session.add(Message(MessageRole.ASSISTANT, responseBuffer.toString(), UUID.randomUUID().toString(), session.nextSeq()))
+                        sessionStore.saveSession(session.threadId, session.getMessages().filter { it.role != MessageRole.SYSTEM })
                         activeStream = null
                         activeMessageId = null
                         publishStatus()
@@ -149,7 +157,8 @@ class ChatService(private val project: Project) : Disposable {
         activeStream?.cancel()
         activeStream = null
         activeMessageId = null
-        session.clear()
+        session = ChatSession()
+        sessionStore.clearSession()
         contextFileCallback?.invoke("")
         publishStatus()
     }
@@ -226,6 +235,20 @@ $selection
         scope.cancel()
     }
 
+    private val bridgeJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+    private fun restoreSessionIfNeeded() {
+        val data = sessionStore.loadSession() ?: return
+        session = ChatSession(data.threadId)
+        data.messages.forEach { session.add(it) }
+        val restoredJson = data.messages.map {
+            mapOf("id" to it.id, "role" to it.role.name.lowercase(), "content" to it.content)
+        }
+        bridgeHandler?.notifyRestoreMessages(
+            bridgeJson.encodeToString(kotlinx.serialization.serializer(), restoredJson)
+        )
+    }
+
     companion object {
         fun getInstance(project: Project): ChatService = project.getService(ChatService::class.java)
     }
@@ -297,13 +320,23 @@ internal fun openSettingsOnEdt(
 
 internal fun formatSystemContent(
     base: String,
-    snapshot: PromptContextSnapshot?
+    snapshot: PromptContextSnapshot?,
+    memoryText: String = ""
 ): String {
-    if (snapshot == null) {
-        return base
+    var result = base
+
+    if (memoryText.isNotBlank()) {
+        result = """$result
+
+[User Memory]
+$memoryText"""
     }
 
-    return """$base
+    if (snapshot == null) {
+        return result
+    }
+
+    return """$result
 
 当前文件：${snapshot.fileName}
 ```${snapshot.extension}
