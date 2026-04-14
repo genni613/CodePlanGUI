@@ -109,6 +109,8 @@ class ChatService(private val project: Project) : Disposable {
             return
         }
 
+        val commandExecutionEnabled = settings.getState().commandExecutionEnabled
+
         val contextSnapshot = if (includeContext && settings.getState().contextInjectionEnabled) {
             capturePromptContextSnapshot()
         } else {
@@ -116,7 +118,7 @@ class ChatService(private val project: Project) : Disposable {
         }
         contextFileCallback?.invoke(resolveUiContextLabel(contextLabelOverride, contextSnapshot))
         val systemContent = formatSystemContent(
-            base = buildBaseSystemPrompt(),
+            base = buildBaseSystemPrompt(commandExecutionEnabled),
             snapshot = contextSnapshot
         )
         session.setSystemMessage(systemContent)
@@ -131,9 +133,6 @@ class ChatService(private val project: Project) : Disposable {
         val msgId = UUID.randomUUID().toString()
         activeMessageId = msgId
         publishStatus()
-
-        val pluginSettings = PluginSettings.getInstance()
-        val commandExecutionEnabled = pluginSettings.getState().commandExecutionEnabled
 
         val request = client.buildRequest(
             config = provider,
@@ -503,12 +502,21 @@ internal fun buildSelectionContextLabel(fileName: String?, lineCount: Int): Stri
     return if (fileName.isNullOrBlank()) lineText else "$fileName · $lineText"
 }
 
-internal fun buildBaseSystemPrompt(): String = """
+internal fun buildBaseSystemPrompt(commandExecutionEnabled: Boolean = false): String =
+    if (commandExecutionEnabled) {
+        """
+你是一个代码助手。请简洁准确地回答用户问题。
+你拥有 run_command 工具，可以在用户项目根目录执行 shell 命令。
+当用户请求运行命令、查看文件、执行构建或测试时，主动调用该工具获取真实结果后再作答。
+        """.trimIndent()
+    } else {
+        """
 你是一个代码助手。请简洁准确地回答用户问题。
 你当前没有终端、文件系统或工具调用能力。
 不要声称你已经执行命令、读取文件、修改代码或查看了运行结果。
 如果用户要求你直接运行命令或检查本地文件，请明确说明当前插件暂不支持该能力，并要求用户粘贴结果或手动提供内容。
-""".trimIndent()
+        """.trimIndent()
+    }
 
 internal fun resolveUiContextLabel(
     contextLabelOverride: String?,
