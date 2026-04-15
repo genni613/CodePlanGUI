@@ -51,6 +51,10 @@ class PluginSettingsConfigurable : Configurable {
     private lateinit var commitLanguageEn: JRadioButton
     private lateinit var commitFormatConventional: JRadioButton
     private lateinit var commitFormatFreeform: JRadioButton
+    private lateinit var commitMultiModeMerge: JRadioButton
+    private lateinit var commitMultiModeSplit: JRadioButton
+    private lateinit var commitMaxFilesSpinner: JSpinner
+    private lateinit var commitDiffLineLimitSpinner: JSpinner
     private lateinit var memoryTextArea: JTextArea
     private lateinit var commandExecutionCheckbox: JCheckBox
     private lateinit var commandTimeoutSpinner: JSpinner
@@ -189,6 +193,16 @@ class PluginSettingsConfigurable : Configurable {
             add(commitFormatFreeform)
         }
 
+        commitMultiModeMerge = JRadioButton("合并为一条", settings.commitMultiMode == "merge")
+        commitMultiModeSplit = JRadioButton("拆分为多条（开发中）", settings.commitMultiMode == "split")
+        ButtonGroup().apply {
+            add(commitMultiModeMerge)
+            add(commitMultiModeSplit)
+        }
+
+        commitMaxFilesSpinner = JSpinner(SpinnerNumberModel(settings.commitMaxFiles, 5, 100, 5))
+        commitDiffLineLimitSpinner = JSpinner(SpinnerNumberModel(settings.commitDiffLineLimit, 100, 2000, 100))
+
         memoryTextArea = JTextArea(settings.memoryText, 5, 40).apply {
             lineWrap = true
             wrapStyleWord = true
@@ -213,6 +227,15 @@ class PluginSettingsConfigurable : Configurable {
                     add(commitFormatFreeform)
                 }
             )
+            .addLabeledComponent(
+                "Multi-file Strategy:",
+                JPanel().apply {
+                    add(commitMultiModeMerge)
+                    add(commitMultiModeSplit)
+                }
+            )
+            .addLabeledComponent("Max Files:", commitMaxFilesSpinner)
+            .addLabeledComponent("Diff Line Limit:", commitDiffLineLimitSpinner)
             .addLabeledComponent(
                 JBLabel("AI 记忆（注入所有对话的系统提示词）:"),
                 JScrollPane(memoryTextArea)
@@ -317,6 +340,10 @@ class PluginSettingsConfigurable : Configurable {
         commitLanguageEn.isSelected = settings.commitLanguage == "en"
         commitFormatConventional.isSelected = settings.commitFormat == "conventional"
         commitFormatFreeform.isSelected = settings.commitFormat == "freeform"
+        commitMultiModeMerge.isSelected = settings.commitMultiMode == "merge"
+        commitMultiModeSplit.isSelected = settings.commitMultiMode == "split"
+        commitMaxFilesSpinner.value = settings.commitMaxFiles
+        commitDiffLineLimitSpinner.value = settings.commitDiffLineLimit
         memoryTextArea.text = settings.memoryText
         val execState = SettingsFormState.fromSettingsState(PluginSettings.getInstance().getState())
         commandExecutionCheckbox.isSelected = execState.commandExecutionEnabled
@@ -337,6 +364,9 @@ class PluginSettingsConfigurable : Configurable {
         chatMaxTokens = (maxTokensSpinner.value as Number).toInt(),
         commitLanguage = if (commitLanguageEn.isSelected) "en" else "zh",
         commitFormat = if (commitFormatFreeform.isSelected) "freeform" else "conventional",
+        commitMultiMode = if (commitMultiModeSplit.isSelected) "split" else "merge",
+        commitMaxFiles = (commitMaxFilesSpinner.value as Number).toInt(),
+        commitDiffLineLimit = (commitDiffLineLimitSpinner.value as Number).toInt(),
         contextInjectionEnabled = contextInjectionCheckbox.isSelected,
         contextMaxLines = (contextMaxLinesSpinner.value as Number).toInt(),
         memoryText = memoryTextArea.text,

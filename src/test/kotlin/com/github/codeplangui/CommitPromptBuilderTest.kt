@@ -2,6 +2,7 @@ package com.github.codeplangui
 
 import com.github.codeplangui.action.CommitPromptBuilder
 import com.github.codeplangui.action.CommitPromptFile
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -84,5 +85,57 @@ class CommitPromptBuilderTest {
 
         assertTrue(preview.contains("[diff truncated]"))
         assertFalse(preview.contains("src/LargeFile40.kt"))
+    }
+
+    @Test
+    fun `stripThinkContent removes think tags`() {
+        val input = """
+<think>
+Let me analyze the changes:
+- src/App.ts: Added new feature X
+- src/Util.ts: Refactored function Y
+</think>
+
+feat(core): add feature X and refactor function Y
+        """.trim()
+
+        val result = CommitPromptBuilder.stripThinkContent(input)
+
+        assertFalse(result.contains("<think>"), "Should not contain <think> tag")
+        assertFalse(result.contains("</think>"), "Should not contain </think> tag")
+        assertTrue(result.contains("feat(core): add feature X"), "Should contain the actual commit message")
+    }
+
+    @Test
+    fun `stripThinkContent handles multiple think blocks`() {
+        val input = """
+<think>
+First thought
+</think>
+
+Some content
+
+<think>
+Second thought
+</think>
+
+More content
+        """.trim()
+
+        val result = CommitPromptBuilder.stripThinkContent(input)
+
+        assertFalse(result.contains("<think>"))
+        assertFalse(result.contains("</think>"))
+        assertTrue(result.contains("Some content"))
+        assertTrue(result.contains("More content"))
+    }
+
+    @Test
+    fun `stripThinkContent returns original when no think tags`() {
+        val input = "feat(auth): add JWT validation"
+
+        val result = CommitPromptBuilder.stripThinkContent(input)
+
+        assertEquals(input, result)
     }
 }

@@ -13,6 +13,113 @@ object CommitPromptBuilder {
     private const val MAX_CHANGED_LINES = 40
     private const val MAX_NEW_FILE_CHARS = 1200
 
+    /**
+     * Strips AI thinking/process tags from generated content.
+     * Some AI providers (like DeepSeek) include <think>...</think> tags in their responses.
+     */
+    fun stripThinkContent(content: String): String {
+        return content
+            .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.DOT_MATCHES_ALL), "")
+            .trim()
+    }
+
+    fun buildStage1Prompt(): String = """
+You are an expert developer specialist in creating git commits.
+Provide a concise one sentence summary for each changed file, describing the main change made.
+Each line must follow this format: {FILE: CHANGES: (CHANGED_LINES_COUNT)}
+
+Rules:
+- Output ONLY the lines of summaries, NO explanations, NO markdown, NO code blocks
+- Each file change gets exactly one line
+- Do not use general terms like "update" or "change", be specific
+- Use present tense, active voice, and imperative mood ("Fix" not "Fixed")
+- Skip lock files: package-lock.json, Cargo.lock, pnpm-lock.yaml, yarn.lock
+- Skip binary files diff content
+- Ignore files under .code folder or .idea folder, unless there aren't other files changed
+- Avoid phrases like "The main goal is to..." or "Based on...", state the change directly
+    """.trimIndent()
+
+    fun buildStage2Prompt(language: String): String {
+        val langInstruction = if (language == "zh") "中文" else "English"
+        return """
+You are an expert developer specialist in creating git commit messages.
+Based on the provided file changes, generate ONE commit message following Conventional Commits.
+
+Rules:
+- Format: <type>(<scope>): <subject>
+- Type must be one of: feat / fix / docs / style / refactor / perf / test / chore / revert / build / ci
+  - feat: Only when adding a new feature
+  - fix: When fixing a bug
+  - docs: When updating documentation
+  - style: Formatting without changing code logic
+  - refactor: Restructuring code without changing external behavior
+  - perf: Improving performance
+  - test: Adding or updating tests
+  - chore: Build process or auxiliary tools changes
+  - revert: Undoing a previous commit
+  - build / ci: Build system or CI changes
+- Scope: derived from the most significant changed directory; omit scope if changes span multiple unrelated directories
+- Subject: use imperative mood, keep under 72 characters
+- Add body with bullet points ONLY when changes are complex enough to need explanation
+- If this is a breaking change, append "!" after type (e.g., "feat(auth)!:")
+- Output ONLY the commit message, no explanation or formatting
+- Use ${langInstruction} for the commit message
+        """.trimIndent()
+    }
+
+    fun buildStage1UserMessage(summaries: List<String>, language: String): String {
+        val langInstruction = if (language == "zh") "中文" else "English"
+        return "Below are the file change summaries. Generate a commit message based on this information.\n\n${summaries.joinToString("\n")}"
+    }
+
+    fun buildStatsUserMessage(
+        files: List<DiffAnalyzer.FileChange>,
+        language: String
+    ): String {
+        val langInstruction = if (language == "zh") "中文" else "English"
+        val summary = files.joinToString("\n") { file ->
+            "${file.path}: (${file.additions} additions, ${file.deletions} deletions)"
+        }
+        return """
+Below is a summary of ${files.size} changed files. Generate an appropriate commit message based on this summary.
+$summary
+
+Generate the commit message in ${langInstruction}, following Conventional Commits format.
+        """.trimIndent()
+    }
+
+    /**
+     * Builds a user message for single-stage generation (fallback path).
+     * Uses the same style as two-stage generation for consistent output.
+     */
+    fun buildSingleStageUserMessage(diff: String, language: String): String {
+        val langInstruction = if (language == "zh") "中文" else "English"
+        val safeDiff = if (diff.length > MAX_DIFF_CHARS) {
+            diff.take(MAX_DIFF_CHARS) + "\n... [diff truncated]"
+        } else {
+            diff
+        }
+        return """
+Below is the git diff. Generate a commit message based on this information.
+
+$safeDiff
+
+Generate the commit message in ${langInstruction}, following Conventional Commits format.
+- Output ONLY the commit message, no explanation
+- Keep subject under 72 characters
+- Use imperative mood
+- Add body with bullet points ONLY when changes are complex enough
+        """.trimIndent()
+    }
+
+    fun buildSingleFilePrompt(file: DiffAnalyzer.FileChange): String {
+        val changeType = file.changeType
+        val path = file.path
+        val lines = file.additions + file.deletions
+        return "File: $path\nChange type: $changeType\nChanged lines: $lines"
+    }
+
     fun buildSystemPrompt(language: String, format: String = "conventional"): String {
         val langInstruction = if (language == "zh") "中文" else "English"
         val formatInstruction = if (format == "freeform") {

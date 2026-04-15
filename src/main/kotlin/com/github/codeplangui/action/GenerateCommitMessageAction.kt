@@ -1,8 +1,6 @@
 package com.github.codeplangui.action
 
 import com.github.codeplangui.api.OkHttpSseClient
-import com.github.codeplangui.model.Message
-import com.github.codeplangui.model.MessageRole
 import com.github.codeplangui.settings.ApiKeyStore
 import com.github.codeplangui.settings.PluginSettings
 import com.intellij.openapi.actionSystem.AnAction
@@ -15,6 +13,7 @@ import com.intellij.openapi.vcs.VcsDataKeys
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.ChangesUtil
+import kotlinx.coroutines.runBlocking
 import java.lang.reflect.Method
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -36,14 +35,14 @@ class GenerateCommitMessageAction : AnAction() {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project
-        val provider = PluginSettings.getInstance().getActiveProvider() ?: run {
+        val activeProvider = PluginSettings.getInstance().getActiveProvider() ?: run {
             Messages.showErrorDialog(project, "请先配置 API Provider", "CodePlanGUI")
             return
         }
         if (project == null) {
             return
         }
-        val apiKey = ApiKeyStore.load(provider.id) ?: ""
+        val apiKey = ApiKeyStore.load(activeProvider.id) ?: ""
         if (apiKey.isBlank()) {
             Messages.showErrorDialog(project, "当前 Provider 尚未配置 API Key", "CodePlanGUI")
             return
@@ -53,49 +52,102 @@ class GenerateCommitMessageAction : AnAction() {
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, "生成 Commit Message...") {
             override fun run(indicator: com.intellij.openapi.progress.ProgressIndicator) {
                 val projectDir = project.basePath ?: return
-                val diff = buildSelectedDiff(e, project).ifBlank { readStagedDiff(projectDir) }
-                if (diff.isBlank()) {
-                    ApplicationManager.getApplication().invokeLater {
-                        Messages.showInfoMessage(project, "没有可用于生成 commit 的变更（请先勾选或 git add）", "CodePlanGUI")
+
+                // Get selected files (from Git Commit dialog or all staged)
+                val selectedFiles = buildSelectedFiles(e, project)
+
+                if (selectedFiles.isEmpty()) {
+                    // Fallback: use git diff --staged
+                    val stagedDiff = readStagedDiff(projectDir)
+                    if (stagedDiff.isBlank()) {
+                        ApplicationManager.getApplication().invokeLater {
+                            Messages.showInfoMessage(project, "没有可用于生成 commit 的变更（请先勾选或 git add）", "CodePlanGUI")
+                        }
+                        return
                     }
+                    // Fallback to old single-stage generation using raw diff
+                    generateFromDiff(stagedDiff, settings, e, project, activeProvider, apiKey, indicator)
                     return
                 }
 
-                val systemPrompt = CommitPromptBuilder.buildSystemPrompt(settings.commitLanguage, settings.commitFormat)
-                val userMessage = CommitPromptBuilder.buildUserMessage(diff, settings.commitLanguage)
-                val messages = listOf(
-                    Message(MessageRole.SYSTEM, systemPrompt),
-                    Message(MessageRole.USER, userMessage)
-                )
-                val request = client.buildRequest(
-                    config = provider,
-                    apiKey = apiKey,
-                    messages = messages,
-                    temperature = 0.3,
-                    maxTokens = 500,
-                    stream = false
-                )
-
-                val result = client.callCommitSync(request)
-                ApplicationManager.getApplication().invokeLater {
-                    result.fold(
-                        onSuccess = { generated ->
-                            applyCommitMessage(e, project, generated.trim())
-                        },
-                        onFailure = { err ->
-                            Messages.showErrorDialog(project, err.message ?: "API 调用失败", "生成失败")
-                        }
-                    )
-                }
+                // Two-stage generation based on selected files
+                generateTwoStage(selectedFiles, settings, e, project, activeProvider, apiKey, indicator)
             }
         })
     }
 
-    private fun buildSelectedDiff(e: AnActionEvent, project: com.intellij.openapi.project.Project): String {
-        val changes = getSelectedChanges(e, project)
-        if (changes.isEmpty()) return ""
+    private fun generateTwoStage(
+        files: List<CommitPromptFile>,
+        settings: com.github.codeplangui.settings.SettingsState,
+        e: AnActionEvent,
+        project: com.intellij.openapi.project.Project,
+        activeProvider: com.github.codeplangui.settings.ProviderConfig,
+        apiKey: String,
+        indicator: com.intellij.openapi.progress.ProgressIndicator
+    ) {
+        val generator = TwoStageCommitGenerator(client, activeProvider, apiKey)
 
-        val files = changes.mapNotNull { change ->
+        val result = runBlocking {
+            generator.generate(files, settings, indicator)
+        }
+
+        ApplicationManager.getApplication().invokeLater {
+            result.fold(
+                onSuccess = { generated ->
+                    val cleaned = CommitPromptBuilder.stripThinkContent(generated)
+                    applyCommitMessage(e, project, cleaned.trim())
+                },
+                onFailure = { err ->
+                    Messages.showErrorDialog(project, err.message ?: "API 调用失败", "生成失败")
+                }
+            )
+        }
+    }
+
+    private fun generateFromDiff(
+        diff: String,
+        settings: com.github.codeplangui.settings.SettingsState,
+        e: AnActionEvent,
+        project: com.intellij.openapi.project.Project,
+        activeProvider: com.github.codeplangui.settings.ProviderConfig,
+        apiKey: String,
+        indicator: com.intellij.openapi.progress.ProgressIndicator
+    ) {
+        // Use the same prompt style as two-stage generation for consistent output
+        val systemPrompt = CommitPromptBuilder.buildStage2Prompt(settings.commitLanguage)
+        val userMessage = CommitPromptBuilder.buildSingleStageUserMessage(diff, settings.commitLanguage)
+        val messages = listOf(
+            com.github.codeplangui.model.Message(com.github.codeplangui.model.MessageRole.SYSTEM, systemPrompt),
+            com.github.codeplangui.model.Message(com.github.codeplangui.model.MessageRole.USER, userMessage)
+        )
+        val request = client.buildRequest(
+            config = activeProvider,
+            apiKey = apiKey,
+            messages = messages,
+            temperature = 0.3,
+            maxTokens = 500,
+            stream = false
+        )
+
+        val result = client.callCommitSync(request)
+        ApplicationManager.getApplication().invokeLater {
+            result.fold(
+                onSuccess = { generated ->
+                    val cleaned = CommitPromptBuilder.stripThinkContent(generated)
+                    applyCommitMessage(e, project, cleaned.trim())
+                },
+                onFailure = { err ->
+                    Messages.showErrorDialog(project, err.message ?: "API 调用失败", "生成失败")
+                }
+            )
+        }
+    }
+
+    private fun buildSelectedFiles(e: AnActionEvent, project: com.intellij.openapi.project.Project): List<CommitPromptFile> {
+        val changes = getSelectedChanges(e, project)
+        if (changes.isEmpty()) return emptyList()
+
+        return changes.mapNotNull { change ->
             try {
                 CommitPromptFile(
                     path = ChangesUtil.getFilePath(change).path,
@@ -107,7 +159,6 @@ class GenerateCommitMessageAction : AnAction() {
                 null
             }
         }
-        return CommitPromptBuilder.buildDiffPreview(files)
     }
 
     private fun getSelectedChanges(

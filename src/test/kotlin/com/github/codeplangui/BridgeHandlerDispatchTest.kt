@@ -54,6 +54,8 @@ class BridgeHandlerDispatchTest {
                 override fun approvalResponse(requestId: String, decision: String) = Unit
 
                 override fun debugLog(text: String) = Unit
+
+                override fun cancelStream() = Unit
             }
         )
 
@@ -116,6 +118,8 @@ class BridgeHandlerDispatchTest {
         override fun debugLog(text: String) {
             debugLogs += text
         }
+
+        override fun cancelStream() = Unit
     }
 }
 
