@@ -69,6 +69,11 @@ class ChatService(private val project: Project) : Disposable {
     // Approval gate: suspended coroutines wait on these futures
     private val pendingApprovals = ConcurrentHashMap<String, CompletableFuture<Boolean>>()
 
+    // Tracks which msgIds have had notifyStart sent to the frontend
+    // When tools are enabled, notifyStart is deferred until the final response round
+    // so ExecutionCards appear before the assistant bubble
+    private val bridgeNotifiedStart = mutableSetOf<String>()
+
     fun attachBridge(handler: BridgeHandler) {
         bridgeHandler = handler
         isFrontendReady = false
@@ -154,7 +159,12 @@ class ChatService(private val project: Project) : Disposable {
             tools = if (commandExecutionEnabled) listOf(runCommandToolDefinition()) else null
         )
 
-        bridgeHandler?.notifyStart(msgId)
+        // When tools are enabled, defer notifyStart so ExecutionCards appear before the assistant bubble.
+        // The bubble is created only on the final response round (no tool calls).
+        if (!commandExecutionEnabled) {
+            bridgeHandler?.notifyStart(msgId)
+            bridgeNotifiedStart.add(msgId)
+        }
         startStreamingRound(msgId, request, toolsEnabled = commandExecutionEnabled)
     }
 
@@ -165,6 +175,7 @@ class ChatService(private val project: Project) : Disposable {
         val msgId = activeMessageId
         activeMessageId = null
         if (wasStreaming && msgId != null) {
+            bridgeNotifiedStart.remove(msgId)
             publishStatus()
             bridgeHandler?.notifyEnd(msgId)
         }
@@ -175,6 +186,7 @@ class ChatService(private val project: Project) : Disposable {
         activeStream = null
         activeMessageId = null
         resetToolCallState()
+        bridgeNotifiedStart.clear()
         session = ChatSession()
         pendingApprovals.values.forEach { it.complete(false) }
         pendingApprovals.clear()
@@ -304,6 +316,8 @@ class ChatService(private val project: Project) : Disposable {
         resetToolCallState()
         responseBuffer.clear()
 
+        // Do NOT call notifyStart here — the next model round might produce more tool calls.
+        // The assistant bubble is only created in startStreamingRound's onEnd (final round, no tool calls).
         sendMessageInternal(msgId)
     }
 
@@ -375,6 +389,7 @@ $selection
         activeStream?.cancel()
         activeStream = null
         activeMessageId = null
+        bridgeNotifiedStart.remove(msgId)
         resetToolCallState()
         publishStatus()
         bridgeHandler?.notifyError(errorMessage)
@@ -388,11 +403,25 @@ $selection
                 onToken = { token ->
                     if (activeMessageId == msgId) {
                         responseBuffer.append(token)
-                        bridgeHandler?.notifyToken(token)
+                        // Only push tokens to the frontend if the assistant bubble has been started.
+                        // When tools are enabled, the bubble is deferred until the final response round
+                        // so ExecutionCards appear first.
+                        if (msgId in bridgeNotifiedStart) {
+                            bridgeHandler?.notifyToken(token)
+                        }
                     }
                 },
                 onEnd = {
                     if (activeMessageId == msgId) {
+                        // If the bubble hasn't been started yet (no tool calls in this round),
+                        // start it now and flush the buffered content.
+                        if (msgId !in bridgeNotifiedStart) {
+                            bridgeHandler?.notifyStart(msgId)
+                            bridgeNotifiedStart.add(msgId)
+                            if (responseBuffer.isNotEmpty()) {
+                                bridgeHandler?.notifyToken(responseBuffer.toString())
+                            }
+                        }
                         logger.info("[CodePlanGUI Approval] model round completed msgId=$msgId")
                         session.add(Message(
                             role = MessageRole.ASSISTANT,
@@ -403,6 +432,7 @@ $selection
                         persistSession()
                         activeStream = null
                         activeMessageId = null
+                        bridgeNotifiedStart.remove(msgId)
                         publishStatus()
                         bridgeHandler?.notifyEnd(msgId)
                     }
@@ -412,6 +442,7 @@ $selection
                         logger.warn("[CodePlanGUI Approval] model round failed msgId=$msgId error=$message")
                         activeStream = null
                         activeMessageId = null
+                        bridgeNotifiedStart.remove(msgId)
                         publishStatus()
                         bridgeHandler?.notifyError(message)
                     }
@@ -423,6 +454,8 @@ $selection
                 },
                 onFinishReason = { reason ->
                     if (toolsEnabled && reason == "tool_calls" && activeMessageId == msgId) {
+                        // Tool calls detected — do NOT start the bubble.
+                        // The first round's buffered text (usually empty) is discarded.
                         val capturedBuffer = responseBuffer
                         scope.launch { handleToolCallComplete(msgId, capturedBuffer) }
                     }
@@ -526,9 +559,12 @@ $selection
             return CompletedToolCall(toolCall, result)
         }
 
+        bridgeHandler?.notifyLog(requestId, "Security check passed", "info")
+
         val future = CompletableFuture<Boolean>()
         pendingApprovals[requestId] = future
         bridgeHandler?.notifyExecutionStatus(requestId, "waiting", "{}")
+        bridgeHandler?.notifyLog(requestId, "Waiting for approval...", "info")
         logger.info("[CodePlanGUI Approval] waiting for user decision requestId=$requestId index=${toolCall.index}")
 
         val approved = try {
@@ -554,15 +590,32 @@ $selection
         }
 
         bridgeHandler?.notifyExecutionStatus(requestId, "running", "{}")
+        bridgeHandler?.notifyLog(requestId, "Executing: ${toolCall.command}", "info")
         logger.info(
             "[CodePlanGUI Approval] starting command execution " +
                 "requestId=$requestId index=${toolCall.index} timeoutSeconds=${state.commandTimeoutSeconds} " +
                 "command=${toolCall.command.summarizeForLog()}"
         )
         val execService = CommandExecutionService.getInstance(project)
-        val result = execService.executeAsync(toolCall.command, state.commandTimeoutSeconds)
+        val result = execService.executeAsyncWithStream(
+            toolCall.command,
+            state.commandTimeoutSeconds
+        ) { line, isError ->
+            bridgeHandler?.notifyLog(requestId, line, if (isError) "stderr" else "stdout")
+        }
         val bridgeStatus = if (result is ExecutionResult.TimedOut) "timeout" else "done"
         bridgeHandler?.notifyExecutionStatus(requestId, bridgeStatus, result.toToolResultContent())
+        val durationMs = when (result) {
+            is ExecutionResult.Success -> result.durationMs
+            is ExecutionResult.Failed -> result.durationMs
+            else -> 0L
+        }
+        val exitCode = when (result) {
+            is ExecutionResult.Success -> result.exitCode
+            is ExecutionResult.Failed -> result.exitCode
+            else -> -1
+        }
+        bridgeHandler?.notifyLog(requestId, "Finished: exit $exitCode, ${durationMs}ms", "info")
         logger.info(
             "[CodePlanGUI Approval] command execution finished " +
                 "requestId=$requestId index=${toolCall.index} bridgeStatus=$bridgeStatus result=${result.summarizeForLog()}"
@@ -592,6 +645,7 @@ $selection
         activeStream?.cancel()
         pendingApprovals.values.forEach { it.complete(false) }
         pendingApprovals.clear()
+        bridgeNotifiedStart.clear()
         scope.cancel()
     }
 

@@ -178,6 +178,7 @@ class BridgeHandler(
                             onContextFile: function(fileName) {},
                             onTheme: function(theme) {},
                             onApprovalRequest: function(requestId, command, description) {},
+                            onLog: function(msgId, logLine, type) {},
                             onExecutionStatus: function(requestId, status, result) {},
                             onRestoreMessages: function(messages) {}
                         };
@@ -205,6 +206,14 @@ class BridgeHandler(
 
     fun notifyTheme(theme: String) =
         pushJS("window.__bridge.onTheme(${json.encodeToString(theme)})")
+
+    fun notifyLog(msgId: String, logLine: String, type: String) =
+        pushJS(
+            "window.__bridge.onLog(" +
+            "${json.encodeToString(msgId)}," +
+            "${json.encodeToString(logLine)}," +
+            "${json.encodeToString(type)})"
+        )
 
     fun notifyApprovalRequest(requestId: String, command: String, description: String) =
         pushJS(

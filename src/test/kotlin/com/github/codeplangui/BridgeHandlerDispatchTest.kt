@@ -93,11 +93,40 @@ class BridgeHandlerDispatchTest {
         assertEquals(listOf("approval modal allow clicked"), commands.debugLogs)
     }
 
+    @Test
+    fun `dispatchBridgeRequest routes cancelStream`() {
+        val commands = RecordingBridgeCommands()
+
+        dispatchBridgeRequest(
+            type = "cancelStream",
+            text = "",
+            includeContext = false,
+            commands = commands
+        )
+
+        assertEquals(1, commands.cancelStreamCalls)
+    }
+
+    @Test
+    fun `handleBridgePayload routes cancelStream via JSON payload`() {
+        val commands = RecordingBridgeCommands()
+
+        val result = handleBridgePayload(
+            payload = """{"type":"cancelStream","text":""}""",
+            json = Json { ignoreUnknownKeys = true },
+            commands = commands
+        )
+
+        assertInstanceOf(BridgePayloadHandlingResult.Success::class.java, result)
+        assertEquals(1, commands.cancelStreamCalls)
+    }
+
     private class RecordingBridgeCommands : BridgeCommands {
         val sentMessages = mutableListOf<SentMessage>()
         var frontendReadyCalls: Int = 0
         val approvalResponses = mutableListOf<Pair<String, String>>()
         val debugLogs = mutableListOf<String>()
+        var cancelStreamCalls: Int = 0
 
         override fun sendMessage(text: String, includeContext: Boolean) {
             sentMessages += SentMessage(text, includeContext)
@@ -119,7 +148,9 @@ class BridgeHandlerDispatchTest {
             debugLogs += text
         }
 
-        override fun cancelStream() = Unit
+        override fun cancelStream() {
+            cancelStreamCalls += 1
+        }
     }
 }
 

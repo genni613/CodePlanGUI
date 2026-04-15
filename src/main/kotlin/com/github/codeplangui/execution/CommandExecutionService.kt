@@ -59,6 +59,77 @@ class CommandExecutionService(private val project: Project) {
         }
     }
 
+    suspend fun executeAsyncWithStream(
+        command: String,
+        timeoutSeconds: Int,
+        onOutput: (line: String, isError: Boolean) -> Unit
+    ): ExecutionResult = withContext(Dispatchers.IO) {
+        val basePath = project.basePath
+            ?: return@withContext ExecutionResult.Blocked(command, "Project path unavailable")
+        val startMs = System.currentTimeMillis()
+
+        val process = ProcessBuilder("sh", "-c", command)
+            .directory(File(basePath))
+            .redirectErrorStream(false)
+            .start()
+
+        val stdoutBuilder = StringBuilder()
+        val stderrBuilder = StringBuilder()
+
+        val stdoutThread = Thread {
+            process.inputStream.bufferedReader().forEachLine { line ->
+                stdoutBuilder.appendLine(line)
+                onOutput(line, false)
+            }
+        }
+        val stderrThread = Thread {
+            process.errorStream.bufferedReader().forEachLine { line ->
+                stderrBuilder.appendLine(line)
+                onOutput(line, true)
+            }
+        }
+        stdoutThread.start()
+        stderrThread.start()
+
+        val finished = process.waitFor(timeoutSeconds.toLong(), TimeUnit.SECONDS)
+        stdoutThread.join(1000)
+        stderrThread.join(1000)
+
+        val stdout = stdoutBuilder.toString()
+        val stderr = stderrBuilder.toString()
+        val durationMs = System.currentTimeMillis() - startMs
+
+        if (!finished) {
+            process.destroyForcibly()
+            ExecutionResult.TimedOut(
+                command = command,
+                stdout = truncateOutput(stdout, 4000),
+                timeoutSeconds = timeoutSeconds
+            )
+        } else {
+            val truncated = stdout.length > 4000 || stderr.length > 2000
+            if (process.exitValue() == 0) {
+                ExecutionResult.Success(
+                    command = command,
+                    stdout = truncateOutput(stdout, 4000),
+                    stderr = truncateOutput(stderr, 2000),
+                    exitCode = 0,
+                    durationMs = durationMs,
+                    truncated = truncated
+                )
+            } else {
+                ExecutionResult.Failed(
+                    command = command,
+                    stdout = truncateOutput(stdout, 4000),
+                    stderr = truncateOutput(stderr, 2000),
+                    exitCode = process.exitValue(),
+                    durationMs = durationMs,
+                    truncated = truncated
+                )
+            }
+        }
+    }
+
     companion object {
         fun extractBaseCommand(command: String): String {
             val stripped = command.trimStart()

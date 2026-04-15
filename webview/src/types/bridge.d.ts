@@ -34,6 +34,7 @@ export interface Bridge {
   approvalResponse: (requestId: string, decision: 'allow' | 'deny') => void
   onApprovalRequest: (requestId: string, command: string, description: string) => void
   onExecutionStatus: (requestId: string, status: string, result: string) => void
+  onLog: (msgId: string, logLine: string, type: string) => void
   onRestoreMessages: (messages: string) => void
 }
 

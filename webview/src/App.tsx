@@ -6,7 +6,7 @@ import { ApprovalDialog } from './components/ApprovalDialog'
 import { ErrorBanner } from './components/ErrorBanner'
 import { Message, MessageBubble } from './components/MessageBubble'
 import { ProviderBar } from './components/ProviderBar'
-import type { ExecutionCardData, ExecutionStatus } from './components/ExecutionCard'
+import type { ExecutionCardData, ExecutionStatus, LogEntry } from './components/ExecutionCard'
 import { getComposerReadiness } from './composerState'
 import { getContextToggleMeta } from './contextState'
 import { parseExecutionResultPayload, stringifyExecutionResultPayload } from './executionStatus'
@@ -166,6 +166,22 @@ export default function App() {
     }
   }, [])
 
+  const onLog = useCallback((requestId: string, logLine: string, type: string) => {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === requestId
+          ? {
+              ...msg,
+              execution: {
+                ...msg.execution!,
+                logs: [...(msg.execution?.logs || []), { text: logLine, type: type as LogEntry['type'] }],
+              },
+            }
+          : msg
+      )
+    )
+  }, [])
+
   // Build theme algorithm for Ant Design
   const themeAlgorithm = themeMode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm
 
@@ -179,6 +195,7 @@ export default function App() {
     onTheme,
     onApprovalRequest,
     onExecutionStatus,
+    onLog,
     onRestoreMessages,
   })
   const composerReadiness = getComposerReadiness({

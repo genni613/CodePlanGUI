@@ -446,3 +446,80 @@ body::before {
     opacity: 0;
   }
 }
+
+/* Execution Card */
+.exec-card {
+  max-width: min(88%, 720px);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--assistant-bubble-bg), var(--panel);
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.exec-card-header {
+  margin-bottom: 6px;
+}
+
+.exec-card-command {
+  font-size: 12px !important;
+}
+
+/* Execution Log Panel (inside ExecutionCard) */
+.exec-log-panel {
+  margin-top: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--pre-bg);
+  overflow: hidden;
+}
+
+.exec-log-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.exec-log-header:hover {
+  color: var(--accent-strong);
+}
+
+.exec-log-title {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.exec-log-body {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.exec-log-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 1px 0;
+}
+
+.exec-log-stdout {
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.exec-log-stderr {
+  color: var(--danger);
+}
+
+.exec-log-info {
+  color: var(--accent);
+  opacity: 0.9;
+}
