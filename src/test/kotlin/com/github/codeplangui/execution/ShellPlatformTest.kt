@@ -102,6 +102,54 @@ class ShellPlatformTest {
         ))
     }
 
+    // ── toolName ─────────────────────────────────────────────────────
+
+    @Test
+    fun `Unix toolName returns run_command`() {
+        assertEquals("run_command", ShellPlatform.Unix.toolName())
+    }
+
+    @Test
+    fun `Windows toolName returns run_powershell`() {
+        assertEquals("run_powershell", ShellPlatform.Windows.toolName())
+    }
+
+    // ── shellHint ─────────────────────────────────────────────────────
+
+    @Test
+    fun `Unix shellHint returns empty string`() {
+        assertEquals("", ShellPlatform.Unix.shellHint())
+    }
+
+    @Test
+    fun `Windows shellHint returns non-empty string`() {
+        assertTrue(ShellPlatform.Windows.shellHint().isNotEmpty())
+    }
+
+    // ── current ───────────────────────────────────────────────────────
+
+    @Test
+    fun `current returns Windows when os name contains win`() {
+        val original = System.getProperty("os.name")
+        try {
+            System.setProperty("os.name", "Windows 11")
+            assertSame(ShellPlatform.Windows, ShellPlatform.current())
+        } finally {
+            System.setProperty("os.name", original)
+        }
+    }
+
+    @Test
+    fun `current returns Unix when os name does not contain win`() {
+        val original = System.getProperty("os.name")
+        try {
+            System.setProperty("os.name", "Mac OS X")
+            assertSame(ShellPlatform.Unix, ShellPlatform.current())
+        } finally {
+            System.setProperty("os.name", original)
+        }
+    }
+
     // ── defaultWhitelist ─────────────────────────────────────────────
 
     @Test
