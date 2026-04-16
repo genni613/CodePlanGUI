@@ -283,8 +283,8 @@ class PluginSettingsConfigurable : Configurable {
             .addLabeledComponent("Execution timeout (s):", commandTimeoutSpinner)
             .addLabeledComponent(JBLabel("Allowed commands:"), whitelistPanel)
             .addComponent(
-                JBLabel("<html><small>&#x26A0; AI still requires your approval before each command runs.<br>" +
-                        "Commands not in this list are blocked without prompting.</small></html>")
+                JBLabel("<html><small>&#x26A0; Commands in this list run without approval.<br>" +
+                        "Commands not in this list will prompt for your approval.</small></html>")
             )
             .panel
 

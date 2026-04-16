@@ -54,7 +54,7 @@ class ChatService(private val project: Project) : Disposable {
     var bridgeHandler: BridgeHandler? = null
         private set
 
-    private val sessionStore = SessionStore()
+    private val sessionStore = SessionStore(SessionStore.projectIdFromPath(project.basePath))
 
     private var contextFileCallback: ((String) -> Unit)? = null
     private var onFrontendReadyCallback: (() -> Unit)? = null

@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 
 @Serializable
 data class SessionData(
@@ -16,18 +17,27 @@ data class SessionData(
     val messages: List<Message>
 )
 
-class SessionStore {
+class SessionStore(private val projectId: String) {
     private val logger = Logger.getInstance(SessionStore::class.java)
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
     private val dataDir: Path by lazy {
-        Path.of(PathManager.getConfigDir().toString(), "codeplangui").also { dir ->
+        Path.of(PathManager.getConfigDir().toString(), "codeplangui", "sessions", projectId).also { dir ->
             Files.createDirectories(dir)
         }
     }
 
     private val sessionFile: Path get() = dataDir.resolve("session.json")
     private val tempFile: Path get() = dataDir.resolve("session.json.tmp")
+
+    companion object {
+        fun projectIdFromPath(basePath: String?): String {
+            if (basePath.isNullOrBlank()) return "default"
+            val digest = MessageDigest.getInstance("SHA-256")
+                .digest(basePath.toByteArray())
+            return digest.take(8).joinToString("") { "%02x".format(it) }
+        }
+    }
 
     fun saveSession(threadId: String, messages: List<Message>) {
         try {
