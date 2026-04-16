@@ -259,8 +259,8 @@ export default function App() {
     const userMsgId = uuidv4()
     setMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: payload.text }])
     setInputText('')
-    setIsLoading(true)
-    setError(null)
+    // loading + error are set in onStart (source of truth), which fires when the backend
+    // begins streaming. This also handles non-handleSend entry points like "Ask AI".
     window.__bridge?.sendMessage(payload.text, includeContext)
   }
 
@@ -356,7 +356,14 @@ export default function App() {
             <MessageBubble key={message.id} message={message} />
           ))}
 
-          {(continuationInfo || (isLoading && !messages.some((m) => m.isStreaming) && messages.some((m) => m.role === 'execution'))) && (
+          {(continuationInfo) && (
+            <div className="continuation-indicator">
+              <span className="continuation-spinner" />
+              {continuationInfo && <span className="continuation-text">续写中 {continuationInfo.current}/{continuationInfo.max}</span>}
+            </div>
+          )}
+
+          {(!continuationInfo && isLoading && !messages.some((m) => m.isStreaming) && messages.some((m) => m.role === 'execution')) && (
             <div className="continuation-indicator">
               <span className="continuation-spinner" />
             </div>

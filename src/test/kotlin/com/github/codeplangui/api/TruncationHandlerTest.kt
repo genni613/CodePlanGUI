@@ -39,6 +39,46 @@ class TruncationHandlerTest {
         assertInstanceOf(TruncationDecision.AutoContinue::class.java, decision)
     }
 
+    // --- isPendingContinuation ---
+
+    @Test
+    fun `isPendingContinuation is false initially`() {
+        assertFalse(handler.isPendingContinuation)
+    }
+
+    @Test
+    fun `isPendingContinuation is true after AutoContinue`() {
+        handler.handleFinishReasonLength(StringBuilder("x"), false)
+        assertTrue(handler.isPendingContinuation)
+    }
+
+    @Test
+    fun `isPendingContinuation is false after Exhausted`() {
+        val buffer = StringBuilder("x")
+        repeat(TruncationHandler.MAX_CONTINUATIONS) {
+            handler.handleFinishReasonLength(buffer, false)
+        }
+        // MAX_CONTINUATIONS-th call returns Exhausted
+        handler.handleFinishReasonLength(buffer, false)
+        assertFalse(handler.isPendingContinuation)
+    }
+
+    @Test
+    fun `clearPendingContinuation clears the flag`() {
+        handler.handleFinishReasonLength(StringBuilder("x"), false)
+        assertTrue(handler.isPendingContinuation)
+        handler.clearPendingContinuation()
+        assertFalse(handler.isPendingContinuation)
+    }
+
+    @Test
+    fun `reset clears isPendingContinuation`() {
+        handler.handleFinishReasonLength(StringBuilder("x"), false)
+        assertTrue(handler.isPendingContinuation)
+        handler.reset()
+        assertFalse(handler.isPendingContinuation)
+    }
+
     // --- AutoContinue decisions ---
 
     @Test

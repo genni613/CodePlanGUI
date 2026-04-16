@@ -408,7 +408,6 @@ $selection
 
     private fun startStreamingRound(msgId: String, request: okhttp3.Request, toolsEnabled: Boolean) {
         val responseBuffer = StringBuilder()
-        var suppressEnd = false
         scope.launch {
             val stream = client.streamChat(
                 request = request,
@@ -424,7 +423,7 @@ $selection
                     }
                 },
                 onEnd = {
-                    if (activeMessageId == msgId && !suppressEnd) {
+                    if (activeMessageId == msgId && !truncationHandler.isPendingContinuation) {
                         // If the bubble hasn't been started yet (no tool calls in this round),
                         // start it now and flush the buffered content.
                         if (msgId !in bridgeNotifiedStart) {
@@ -476,11 +475,13 @@ $selection
                         val hasIncompleteToolCalls = !toolCallAccumulator.isEmpty()
                         when (val decision = truncationHandler.handleFinishReasonLength(responseBuffer, hasIncompleteToolCalls)) {
                             is TruncationDecision.AutoContinue -> {
-                                suppressEnd = true
                                 logger.info("[CodePlanGUI Truncation] auto-continuation ${decision.count}/${decision.max} msgId=$msgId")
                                 scope.launch { handleLengthTruncation(msgId, capturedBuffer, decision.continuationPrompt) }
                             }
                             is TruncationDecision.Exhausted -> {
+                                // Intentionally does NOT suppress onEnd. The marker was appended to
+                                // responseBuffer by handleFinishReasonLength. Normal onEnd processing
+                                // will flush the buffer (including marker) to the frontend and session.
                                 logger.info("[CodePlanGUI Truncation] max continuations reached, appending marker msgId=$msgId")
                             }
                         }
@@ -502,7 +503,12 @@ $selection
     private suspend fun handleLengthTruncation(msgId: String, partialBuffer: StringBuilder, continuationPrompt: String) {
         if (activeMessageId != msgId) return
 
-        // Save partial assistant response
+        // Clear the pending flag — onEnd in the continuation round should fire normally.
+        truncationHandler.clearPendingContinuation()
+
+        // TODO: Each continuation round creates a separate assistant message + hidden user prompt
+        // in the session. This inflates context for subsequent API calls. Consider merging all
+        // partial assistant content into a single message after the final round completes.
         session.add(Message(
             role = MessageRole.ASSISTANT,
             content = partialBuffer.toString(),

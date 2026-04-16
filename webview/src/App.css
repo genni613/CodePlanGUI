@@ -365,6 +365,11 @@ body::before {
   font-size: 12px;
 }
 
+.continuation-text {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .continuation-spinner {
   display: inline-block;
   width: 12px;

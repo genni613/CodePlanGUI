@@ -18,8 +18,17 @@ internal class TruncationHandler(
 ) {
     private var continuationCount = 0
 
+    /** True after an AutoContinue decision, cleared when the continuation round begins. */
+    var isPendingContinuation: Boolean = false
+        private set
+
     fun reset() {
         continuationCount = 0
+        isPendingContinuation = false
+    }
+
+    fun clearPendingContinuation() {
+        isPendingContinuation = false
     }
 
     val count: Int get() = continuationCount
@@ -34,12 +43,14 @@ internal class TruncationHandler(
     ): TruncationDecision {
         continuationCount++
         return if (continuationCount <= maxContinuations) {
+            isPendingContinuation = true
             TruncationDecision.AutoContinue(
                 count = continuationCount,
                 max = maxContinuations,
                 continuationPrompt = if (hasIncompleteToolCalls) toolCallContinuationPrompt else textContinuationPrompt
             )
         } else {
+            isPendingContinuation = false
             responseBuffer.append(truncationMarker)
             TruncationDecision.Exhausted(marker = truncationMarker)
         }
