@@ -10,11 +10,14 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 @Serializable
 data class SessionData(
     val threadId: String,
-    val messages: List<Message>
+    val messages: List<Message>,
+    val lastAccessedAt: Long = System.currentTimeMillis()
 )
 
 class SessionStore(private val projectId: String) {
@@ -41,7 +44,7 @@ class SessionStore(private val projectId: String) {
 
     fun saveSession(threadId: String, messages: List<Message>) {
         try {
-            val data = SessionData(threadId, messages)
+            val data = SessionData(threadId, messages, lastAccessedAt = System.currentTimeMillis())
             val content = json.encodeToString(data)
             Files.writeString(tempFile, content)
             try {
@@ -63,6 +66,38 @@ class SessionStore(private val projectId: String) {
         } catch (e: Exception) {
             logger.warn("Failed to load session", e)
             null
+        }
+    }
+
+    /**
+     * Evict sessions that haven't been accessed within [ttlDays] days.
+     * Scans all project session directories under the sessions root.
+     */
+    fun evictExpiredSessions(ttlDays: Int) {
+        if (ttlDays <= 0) return
+        try {
+            val sessionsRoot = dataDir.parent
+            if (!Files.isDirectory(sessionsRoot)) return
+            val cutoff = Instant.now().minus(ttlDays.toLong(), ChronoUnit.DAYS)
+            Files.list(sessionsRoot).use { dirs ->
+                dirs.filter { Files.isDirectory(it) }.forEach { projectDir ->
+                    val file = projectDir.resolve("session.json")
+                    if (!Files.exists(file)) return@forEach
+                    try {
+                        val content = Files.readString(file)
+                        val data = json.decodeFromString<SessionData>(content)
+                        val lastAccess = Instant.ofEpochMilli(data.lastAccessedAt)
+                        if (lastAccess.isBefore(cutoff)) {
+                            Files.deleteIfExists(file)
+                            logger.warn("Evicted expired session: $projectDir (last accessed $lastAccess)")
+                        }
+                    } catch (e: Exception) {
+                        logger.warn("Failed to check session expiry for $projectDir", e)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to evict expired sessions", e)
         }
     }
 
