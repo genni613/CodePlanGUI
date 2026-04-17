@@ -1,8 +1,8 @@
 name: PR-Agent
 
 on:
-  pull_request:
-    types: [opened, reopened, ready_for_review]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
   pull_request_review_comment:
     types: [created]
   issue_comment:
@@ -15,7 +15,29 @@ permissions:
 
 jobs:
   pr_agent:
-    if: ${{ github.event.sender.type != 'Bot' }}
+    # Gate by actor identity to avoid leaking secrets on fork PRs:
+    #   - pull_request[_target] events: the PR author must be a trusted role
+    #     (OWNER / MEMBER / COLLABORATOR) → auto-runs describe + review on
+    #     every push (`synchronize`).
+    #   - issue_comment / pull_request_review_comment: the commenter must be
+    #     a trusted role → lets designated reviewers manually re-trigger via
+    #     PR-Agent slash commands (e.g. `/review`, `/improve`).
+    if: >
+      github.event.sender.type != 'Bot' &&
+      (
+        (
+          (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
+          (github.event.pull_request.author_association == 'OWNER' ||
+           github.event.pull_request.author_association == 'MEMBER' ||
+           github.event.pull_request.author_association == 'COLLABORATOR')
+        ) ||
+        (
+          (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') &&
+          (github.event.comment.author_association == 'OWNER' ||
+           github.event.comment.author_association == 'MEMBER' ||
+           github.event.comment.author_association == 'COLLABORATOR')
+        )
+      )
     runs-on: ubuntu-latest
     name: Run PR-Agent
     steps:
@@ -24,10 +46,6 @@ jobs:
         env:
           OPENAI_KEY: ${{ secrets.api_key }}
           OPENAI_API_BASE: https://ark.cn-beijing.volces.com/api/coding/v3
-<<<<<<< Updated upstream
-          CONFIG.AI_PROVIDER: openai
-          CONFIG.MODEL: MiniMax-M2.5
-=======
           CONFIG__AI_PROVIDER: openai
           CONFIG__MODEL: MiniMax-M2.5
           CONFIG__MODEL_WEAK: MiniMax-M2.5
@@ -36,5 +54,4 @@ jobs:
           GITHUB_ACTION_CONFIG__AUTO_DESCRIBE: "true"
           GITHUB_ACTION_CONFIG__AUTO_REVIEW: "true"
           GITHUB_ACTION_CONFIG__AUTO_IMPROVE: "true"
->>>>>>> Stashed changes
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -105,6 +105,80 @@ class ShellPlatformTest {
         ))
     }
 
+    // ── Unix.hasPathsOutsideWorkspace: quoted / heredoc stripping ────
+
+    @Test
+    fun `Unix hasPathsOutside ignores javadoc inside single quotes`() {
+        assertFalse(ShellPlatform.Unix.hasPathsOutsideWorkspace(
+            "echo '/** comment */' > ./src/Foo.java", "/home/user/project"
+        ))
+    }
+
+    @Test
+    fun `Unix hasPathsOutside ignores javadoc inside double quotes`() {
+        assertFalse(ShellPlatform.Unix.hasPathsOutsideWorkspace(
+            "echo \"/** comment */\" > ./src/Foo.java", "/home/user/project"
+        ))
+    }
+
+    @Test
+    fun `Unix hasPathsOutside ignores heredoc body with quoted delimiter`() {
+        val cmd = "cat > ./src/Foo.java << 'EOF'\n/**\n * javadoc\n */\npublic class Foo {}\nEOF\n"
+        assertFalse(ShellPlatform.Unix.hasPathsOutsideWorkspace(cmd, "/home/user/project"))
+    }
+
+    @Test
+    fun `Unix hasPathsOutside ignores heredoc body with unquoted delimiter`() {
+        val cmd = "cat > ./src/Foo.java << EOF\n/etc/passwd is just text here\nEOF\n"
+        assertFalse(ShellPlatform.Unix.hasPathsOutsideWorkspace(cmd, "/home/user/project"))
+    }
+
+    @Test
+    fun `Unix hasPathsOutside ignores tab-stripped heredoc body`() {
+        val cmd = "cat <<-EOF\n\t/** stuff */\n\tEOF\n"
+        assertFalse(ShellPlatform.Unix.hasPathsOutsideWorkspace(cmd, "/home/user/project"))
+    }
+
+    @Test
+    fun `Unix hasPathsOutside still catches absolute path after heredoc`() {
+        val cmd = "cat << 'EOF'\n/** safe body */\nEOF\ncat /etc/passwd"
+        assertTrue(ShellPlatform.Unix.hasPathsOutsideWorkspace(cmd, "/home/user/project"))
+    }
+
+    @Test
+    fun `Unix hasPathsOutside still catches absolute path between quoted segments`() {
+        assertTrue(ShellPlatform.Unix.hasPathsOutsideWorkspace(
+            "echo 'hello' /etc/passwd \"world\"", "/home/user/project"
+        ))
+    }
+
+    @Test
+    fun `Unix hasPathsOutside handles malformed unclosed quote without crashing`() {
+        assertFalse(ShellPlatform.Unix.hasPathsOutsideWorkspace(
+            "echo 'dangling /** quote", "/home/user/project"
+        ))
+    }
+
+    @Test
+    fun `Unix hasPathsOutside treats here-string as regular quoted arg`() {
+        assertFalse(ShellPlatform.Unix.hasPathsOutsideWorkspace(
+            "grep foo <<< '/** not a path */'", "/home/user/project"
+        ))
+    }
+
+    @Test
+    fun `Unix hasPathsOutside does not treat here-string body as heredoc`() {
+        assertTrue(ShellPlatform.Unix.hasPathsOutsideWorkspace(
+            "grep foo <<< /etc/passwd", "/home/user/project"
+        ))
+    }
+
+    @Test
+    fun `Unix hasPathsOutside handles python inline script with javadoc string`() {
+        val cmd = "python3 -c \"open('./src/Foo.java','w').write('/** javadoc */')\""
+        assertFalse(ShellPlatform.Unix.hasPathsOutsideWorkspace(cmd, "/home/user/project"))
+    }
+
     // ── Windows.hasPathsOutsideWorkspace ─────────────────────────────
 
     @Test
@@ -156,6 +230,30 @@ class ShellPlatformTest {
     fun `Windows hasPathsOutside returns false for exact project root path`() {
         assertFalse(ShellPlatform.Windows.hasPathsOutsideWorkspace(
             "Get-ChildItem C:\\Users\\user\\project",
+            "C:\\Users\\user\\project"
+        ))
+    }
+
+    @Test
+    fun `Windows hasPathsOutside ignores drive path inside single quotes`() {
+        assertFalse(ShellPlatform.Windows.hasPathsOutsideWorkspace(
+            "Write-Output 'C:\\Windows\\System32 is just text'",
+            "C:\\Users\\user\\project"
+        ))
+    }
+
+    @Test
+    fun `Windows hasPathsOutside ignores drive path inside double quotes`() {
+        assertFalse(ShellPlatform.Windows.hasPathsOutsideWorkspace(
+            "Write-Output \"C:\\Windows\\System32 is just text\"",
+            "C:\\Users\\user\\project"
+        ))
+    }
+
+    @Test
+    fun `Windows hasPathsOutside still catches drive path between quoted segments`() {
+        assertTrue(ShellPlatform.Windows.hasPathsOutsideWorkspace(
+            "Write-Output 'safe' C:\\Windows\\System32\\hosts \"also safe\"",
             "C:\\Users\\user\\project"
         ))
     }

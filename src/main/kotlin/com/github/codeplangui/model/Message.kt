@@ -32,5 +32,7 @@ data class Message(
     val toolCallId: String? = null,
     val toolCalls: List<ToolCallRecord>? = null,
     val id: String = UUID.randomUUID().toString(),
-    val seq: Int = 0
+    val seq: Int = 0,
+    /** If true, this message is internal (e.g. auto-continuation prompt) and should not be shown to the user. */
+    val hidden: Boolean = false
 )

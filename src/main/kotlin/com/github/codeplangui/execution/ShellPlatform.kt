@@ -8,6 +8,80 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
 
+private val WHITESPACE = Regex("\\s+")
+
+private fun Char.isSpaceOrTab() = this == ' ' || this == '\t'
+
+// Trade-off: a fully quoted absolute path such as `cat "/etc/passwd"` no
+// longer trips the workspace check. User approval remains the real gate —
+// this helper reduces false positives on legitimate commands (e.g. Java
+// source written via heredoc), not security.
+private fun stripLiteralsAndHeredocs(command: String): String {
+    val n = command.length
+    val out = StringBuilder(n)
+    var i = 0
+    while (i < n) {
+        val c = command[i]
+        when {
+            c == '\'' || c == '"' -> {
+                val end = command.indexOf(c, i + 1)
+                out.append(' ')
+                i = if (end < 0) n else end + 1
+            }
+            c == '<' && i + 1 < n && command[i + 1] == '<' && (i + 2 >= n || command[i + 2] != '<') -> {
+                val end = consumeHeredoc(command, i)
+                if (end > i) { out.append(' '); i = end } else { out.append(c); i++ }
+            }
+            else -> { out.append(c); i++ }
+        }
+    }
+    return out.toString()
+}
+
+// Returns the index just past the heredoc closing delimiter, or `start` if
+// the construct is not a well-formed heredoc. The closing delimiter is
+// matched even with leading whitespace (pragmatic relaxation of bash's
+// tab-only `<<-` rule).
+private fun consumeHeredoc(command: String, start: Int): Int {
+    val n = command.length
+    var j = start + 2
+    if (j < n && command[j] == '-') j++
+    while (j < n && command[j].isSpaceOrTab()) j++
+
+    val quoteChar = if (j < n && (command[j] == '\'' || command[j] == '"')) command[j] else null
+    if (quoteChar != null) j++
+    val delimStart = j
+    val delimEnd = if (quoteChar != null) {
+        val close = command.indexOf(quoteChar, j)
+        if (close < 0) return start
+        close
+    } else {
+        var k = j
+        while (k < n && (command[k].isLetterOrDigit() || command[k] == '_')) k++
+        k
+    }
+    val delimLen = delimEnd - delimStart
+    if (delimLen == 0) return start
+    j = delimEnd + if (quoteChar != null) 1 else 0
+
+    var pos = j
+    while (pos < n) {
+        val nl = command.indexOf('\n', pos)
+        if (nl < 0) return n
+        var ls = nl + 1
+        while (ls < n && command[ls].isSpaceOrTab()) ls++
+        if (ls + delimLen <= n &&
+            command.regionMatches(ls, command, delimStart, delimLen)) {
+            val after = ls + delimLen
+            if (after == n || command[after] == '\n' || command[after].isSpaceOrTab()) {
+                return if (after < n && command[after] == '\n') after + 1 else after
+            }
+        }
+        pos = nl + 1
+    }
+    return n
+}
+
 sealed class ShellPlatform {
 
     abstract fun buildProcess(command: String, workDir: File): ProcessBuilder
@@ -36,7 +110,8 @@ sealed class ShellPlatform {
         override fun hasPathsOutsideWorkspace(command: String, basePath: String): Boolean {
             val home = System.getProperty("user.home") ?: ""
             val normalizedBase = basePath.trimEnd('/')
-            return command.split("\\s+".toRegex()).any { token ->
+            val stripped = stripLiteralsAndHeredocs(command)
+            return stripped.split(WHITESPACE).any { token ->
                 if (token.startsWith('-')) return@any false
                 val expanded = if (token.startsWith("~/")) home + token.drop(1) else token
                 if (!expanded.startsWith('/')) return@any false
@@ -106,7 +181,8 @@ sealed class ShellPlatform {
 
         override fun hasPathsOutsideWorkspace(command: String, basePath: String): Boolean {
             val normalizedBase = basePath.replace('/', '\\').trimEnd('\\')
-            return command.split("\\s+".toRegex()).any { token ->
+            val stripped = stripLiteralsAndHeredocs(command)
+            return stripped.split(WHITESPACE).any { token ->
                 if (token.startsWith('-')) return@any false
                 val normalized = token.replace('/', '\\')
                 val isAbsolute = normalized.matches(Regex("[A-Za-z]:\\\\.*")) || normalized.startsWith("\\\\")

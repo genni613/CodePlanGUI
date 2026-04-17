@@ -60,6 +60,7 @@ class PluginSettingsConfigurable : Configurable {
     private lateinit var commandTimeoutSpinner: JSpinner
     private lateinit var commandWhitelistModel: DefaultListModel<String>
     private lateinit var commandWhitelistList: JList<String>
+    private lateinit var sessionTtlDaysSpinner: JSpinner
     private val client = OkHttpSseClient()
     private val pendingApiKeyUpdates = linkedMapOf<String, String?>()
 
@@ -208,6 +209,8 @@ class PluginSettingsConfigurable : Configurable {
             wrapStyleWord = true
         }
 
+        sessionTtlDaysSpinner = JSpinner(SpinnerNumberModel(settings.sessionTtlDays, 1, 365, 1))
+
         val chatCommitPanel = FormBuilder.createFormBuilder()
             .addLabeledComponent("Temperature:", temperatureSpinner)
             .addLabeledComponent("Max Tokens:", maxTokensSpinner)
@@ -239,6 +242,10 @@ class PluginSettingsConfigurable : Configurable {
             .addLabeledComponent(
                 JBLabel("AI 记忆（注入所有对话的系统提示词）:"),
                 JScrollPane(memoryTextArea)
+            )
+            .addLabeledComponent(
+                "Session 过期天数 (0 = 永不过期):",
+                sessionTtlDaysSpinner
             )
             .panel
 
@@ -345,6 +352,7 @@ class PluginSettingsConfigurable : Configurable {
         commitMaxFilesSpinner.value = settings.commitMaxFiles
         commitDiffLineLimitSpinner.value = settings.commitDiffLineLimit
         memoryTextArea.text = settings.memoryText
+        sessionTtlDaysSpinner.value = settings.sessionTtlDays
         val execState = SettingsFormState.fromSettingsState(PluginSettings.getInstance().getState())
         commandExecutionCheckbox.isSelected = execState.commandExecutionEnabled
         commandTimeoutSpinner.value = execState.commandTimeoutSeconds
@@ -375,6 +383,7 @@ class PluginSettingsConfigurable : Configurable {
             commandWhitelistModel.getElementAt(it)
         }.toMutableList(),
         commandTimeoutSeconds = (commandTimeoutSpinner.value as Number).toInt(),
+        sessionTtlDays = (sessionTtlDaysSpinner.value as Number).toInt(),
     )
 
     private fun selectedProviderId(): String? =

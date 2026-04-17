@@ -36,6 +36,7 @@ export default function App() {
   const [approvalRequestId, setApprovalRequestId] = useState('')
   const [approvalCommand, setApprovalCommand] = useState('')
   const [approvalDescription, setApprovalDescription] = useState('')
+  const [continuationInfo, setContinuationInfo] = useState<{ current: number; max: number } | null>(null)
 
   // Apply theme class to document root
   useEffect(() => {
@@ -70,6 +71,7 @@ export default function App() {
 
   const onEnd = useCallback((_msgId: string) => {
     setIsLoading(false)
+    setContinuationInfo(null)
     setMessages((prev) =>
       prev.map((message) => (message.isStreaming ? { ...message, isStreaming: false } : message)),
     )
@@ -77,6 +79,7 @@ export default function App() {
 
   const onError = useCallback((message: string) => {
     setIsLoading(false)
+    setContinuationInfo(null)
     setMessages((prev) =>
       prev.map((item) => (item.isStreaming ? { ...item, isStreaming: false } : item)),
     )
@@ -204,6 +207,10 @@ export default function App() {
     )
   }, [])
 
+  const onContinuation = useCallback((current: number, max: number) => {
+    setContinuationInfo({ current, max })
+  }, [])
+
   // Build theme algorithm for Ant Design
   const themeAlgorithm = themeMode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm
 
@@ -221,6 +228,7 @@ export default function App() {
     onExecutionStatus,
     onLog,
     onRestoreMessages,
+    onContinuation,
   })
   // Clear stale errors when the bridge reconnects (e.g., after webview reload)
   useEffect(() => {
@@ -251,6 +259,8 @@ export default function App() {
     const userMsgId = uuidv4()
     setMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: payload.text }])
     setInputText('')
+    // loading + error are set in onStart (source of truth), which fires when the backend
+    // begins streaming. This also handles non-handleSend entry points like "Ask AI".
     window.__bridge?.sendMessage(payload.text, includeContext)
   }
 
@@ -345,6 +355,19 @@ export default function App() {
           {messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}
+
+          {(continuationInfo) && (
+            <div className="continuation-indicator">
+              <span className="continuation-spinner" />
+              {continuationInfo && <span className="continuation-text">续写中 {continuationInfo.current}/{continuationInfo.max}</span>}
+            </div>
+          )}
+
+          {(!continuationInfo && isLoading && !messages.some((m) => m.isStreaming) && messages.some((m) => m.role === 'execution')) && (
+            <div className="continuation-indicator">
+              <span className="continuation-spinner" />
+            </div>
+          )}
 
           <div ref={messagesEndRef} />
         </div>
