@@ -15,6 +15,7 @@ interface BridgeCallbacks {
   onExecutionStatus: (requestId: string, status: string, result: string) => void
   onLog: (msgId: string, logLine: string, type: string) => void
   onRestoreMessages: (messages: string) => void
+  onContinuation: (current: number, max: number) => void
 }
 
 export function useBridge(callbacks: BridgeCallbacks) {
@@ -41,6 +42,7 @@ export function useBridge(callbacks: BridgeCallbacks) {
     window.__bridge.onExecutionStatus = callbacks.onExecutionStatus
     window.__bridge.onLog = callbacks.onLog
     window.__bridge.onRestoreMessages = callbacks.onRestoreMessages
+    window.__bridge.onContinuation = callbacks.onContinuation
   }, [callbacks])
 
   useEffect(() => {
@@ -69,6 +71,7 @@ export function useBridge(callbacks: BridgeCallbacks) {
           onExecutionStatus: currentCallbacks.onExecutionStatus,
           onLog: currentCallbacks.onLog,
           onRestoreMessages: currentCallbacks.onRestoreMessages,
+          onContinuation: currentCallbacks.onContinuation,
         }
       } else {
         window.__bridge.onStart = currentCallbacks.onStart
@@ -84,6 +87,7 @@ export function useBridge(callbacks: BridgeCallbacks) {
         window.__bridge.onExecutionStatus = currentCallbacks.onExecutionStatus
         window.__bridge.onLog = currentCallbacks.onLog
         window.__bridge.onRestoreMessages = currentCallbacks.onRestoreMessages
+        window.__bridge.onContinuation = currentCallbacks.onContinuation
       }
 
       const isReady = window.__bridge.isReady === true
