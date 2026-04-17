@@ -24,6 +24,17 @@ jobs:
         env:
           OPENAI_KEY: ${{ secrets.api_key }}
           OPENAI_API_BASE: https://ark.cn-beijing.volces.com/api/coding/v3
+<<<<<<< Updated upstream
           CONFIG.AI_PROVIDER: openai
           CONFIG.MODEL: MiniMax-M2.5
+=======
+          CONFIG__AI_PROVIDER: openai
+          CONFIG__MODEL: MiniMax-M2.5
+          CONFIG__MODEL_WEAK: MiniMax-M2.5
+          CONFIG__FALLBACK_MODELS: MiniMax-M2.5
+          CONFIG__CUSTOM_MODEL_MAX_TOKENS: "128000"
+          GITHUB_ACTION_CONFIG__AUTO_DESCRIBE: "true"
+          GITHUB_ACTION_CONFIG__AUTO_REVIEW: "true"
+          GITHUB_ACTION_CONFIG__AUTO_IMPROVE: "true"
+>>>>>>> Stashed changes
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
