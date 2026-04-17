@@ -30,9 +30,10 @@ data class SettingsState(
     var contextInjectionEnabled: Boolean = true,
     var contextMaxLines: Int = 300,
     var memoryText: String = "",
-    var commandExecutionEnabled: Boolean = false,
+    var commandExecutionEnabled: Boolean = true,
     var commandWhitelist: MutableList<String> = ShellPlatform.current().defaultWhitelist().toMutableList(),
-    var commandTimeoutSeconds: Int = 30
+    var commandTimeoutSeconds: Int = 30,
+    var sessionTtlDays: Int = 30
 )
 
 @State(

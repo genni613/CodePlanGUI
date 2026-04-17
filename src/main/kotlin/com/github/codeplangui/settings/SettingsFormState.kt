@@ -15,9 +15,10 @@ data class SettingsFormState(
     var contextInjectionEnabled: Boolean = true,
     var contextMaxLines: Int = 300,
     var memoryText: String = "",
-    var commandExecutionEnabled: Boolean = false,
+    var commandExecutionEnabled: Boolean = true,
     var commandWhitelist: MutableList<String> = ShellPlatform.current().defaultWhitelist().toMutableList(),
-    var commandTimeoutSeconds: Int = 30
+    var commandTimeoutSeconds: Int = 30,
+    var sessionTtlDays: Int = 30
 ) {
     fun toSettingsState(): SettingsState = SettingsState(
         providers = providers.toMutableList(),
@@ -35,6 +36,7 @@ data class SettingsFormState(
         commandExecutionEnabled = commandExecutionEnabled,
         commandWhitelist = commandWhitelist.toMutableList(),
         commandTimeoutSeconds = commandTimeoutSeconds,
+        sessionTtlDays = sessionTtlDays,
     )
 
     companion object {
@@ -54,6 +56,7 @@ data class SettingsFormState(
             commandExecutionEnabled = state.commandExecutionEnabled,
             commandWhitelist = state.commandWhitelist.toMutableList(),
             commandTimeoutSeconds = state.commandTimeoutSeconds,
+            sessionTtlDays = state.sessionTtlDays,
         )
     }
 }

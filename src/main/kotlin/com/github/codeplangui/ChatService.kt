@@ -56,7 +56,7 @@ class ChatService(private val project: Project) : Disposable {
     var bridgeHandler: BridgeHandler? = null
         private set
 
-    private val sessionStore = SessionStore()
+    private val sessionStore = SessionStore(SessionStore.projectIdFromPath(project.basePath))
 
     private var contextFileCallback: ((String) -> Unit)? = null
     private var onFrontendReadyCallback: (() -> Unit)? = null
@@ -725,6 +725,8 @@ $selection
         if (session.getMessages().any { it.role != MessageRole.SYSTEM }) {
             return
         }
+        val ttlDays = PluginSettings.getInstance().state.sessionTtlDays
+        sessionStore.evictExpiredSessions(ttlDays)
         val data = sessionStore.loadSession() ?: return
         session = ChatSession(data.threadId)
         data.messages.forEach { session.add(it) }

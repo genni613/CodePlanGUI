@@ -22,5 +22,8 @@ jobs:
       - name: PR-Agent
         uses: Codium-ai/pr-agent@main
         env:
-          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+          OPENAI_KEY: ${{ secrets.api_key }}
+          OPENAI_API_BASE: https://ark.cn-beijing.volces.com/api/coding/v3
+          CONFIG.AI_PROVIDER: openai
+          CONFIG.MODEL: MiniMax-M2.5
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
