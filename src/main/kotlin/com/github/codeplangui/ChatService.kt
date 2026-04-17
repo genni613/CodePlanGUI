@@ -667,6 +667,8 @@ $selection
         if (session.getMessages().any { it.role != MessageRole.SYSTEM }) {
             return
         }
+        val ttlDays = PluginSettings.getInstance().state.sessionTtlDays
+        sessionStore.evictExpiredSessions(ttlDays)
         val data = sessionStore.loadSession() ?: return
         session = ChatSession(data.threadId)
         data.messages.forEach { session.add(it) }
