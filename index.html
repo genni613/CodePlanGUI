@@ -1,395 +1,429 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CodePlanGUI - 你的 IDEA AI 助手</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    :root{
-      --blue:#2F80ED;--blue-light:#5699F2;--blue-dark:#1A5FBB;
-      --bg:#0B0F1A;--surface:#111827;--surface-2:#1F2937;
-      --text:#F9FAFB;--text-sec:#9CA3AF;--text-muted:#6B7280;
-      --border:#1F2937;--accent:#38BDF8;
-    }
-    html{scroll-behavior:smooth}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}
-
-    /* Nav */
-    nav{position:fixed;top:0;width:100%;z-index:100;padding:16px 0;transition:background .3s,box-shadow .3s}
-    nav.scrolled{background:rgba(11,15,26,.92);backdrop-filter:blur(12px);box-shadow:0 1px 0 var(--border)}
-    .nav-inner{max-width:1120px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
-    .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;color:var(--text);text-decoration:none}
-    .logo svg{flex-shrink:0}
-    .nav-links{display:flex;gap:28px;align-items:center}
-    .nav-links a{color:var(--text-sec);text-decoration:none;font-size:14px;transition:color .2s}
-    .nav-links a:hover{color:var(--text)}
-    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;transition:all .2s;border:none;cursor:pointer}
-    .btn-primary{background:var(--blue);color:#fff}
-    .btn-primary:hover{background:var(--blue-light);transform:translateY(-1px);box-shadow:0 4px 16px rgba(47,128,237,.35)}
-    .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border)}
-    .btn-outline:hover{border-color:var(--blue);color:var(--blue)}
-
-    /* Hero */
-    .hero{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:120px 24px 80px;position:relative}
-    .hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(47,128,237,.12) 0%,transparent 70%);pointer-events:none}
-    .hero-content{max-width:720px;position:relative;z-index:1}
-    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:99px;background:rgba(47,128,237,.12);border:1px solid rgba(47,128,237,.25);font-size:13px;color:var(--blue-light);margin-bottom:28px}
-    .badge .dot{width:6px;height:6px;border-radius:50%;background:#34D399;animation:pulse 2s infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-    h1{font-size:clamp(36px,5.5vw,56px);font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-bottom:20px}
-    h1 .highlight{background:linear-gradient(135deg,var(--blue),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-    .hero p{font-size:18px;color:var(--text-sec);max-width:540px;margin:0 auto 36px}
-    .hero-buttons{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-    .hero-sub{margin-top:20px;font-size:13px;color:var(--text-muted)}
-
-    /* Section shared */
-    section{padding:100px 24px}
-    .container{max-width:1120px;margin:0 auto}
-    .section-label{font-size:13px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
-    .section-title{font-size:clamp(28px,4vw,40px);font-weight:700;margin-bottom:16px;letter-spacing:-.01em}
-    .section-desc{font-size:16px;color:var(--text-sec);max-width:560px;margin-bottom:48px}
-
-    /* Features */
-    .features-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-    .feature-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;transition:border-color .25s,transform .25s}
-    .feature-card:hover{border-color:rgba(47,128,237,.4);transform:translateY(-2px)}
-    .feature-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px;background:rgba(47,128,237,.1)}
-    .feature-card h3{font-size:16px;font-weight:600;margin-bottom:8px}
-    .feature-card p{font-size:14px;color:var(--text-sec);line-height:1.6}
-    .feature-planned{opacity:.45;cursor:default;position:relative}
-    .feature-planned:hover{border-color:var(--border);transform:none}
-    .planned-badge{position:absolute;top:16px;right:16px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:rgba(255,255,255,.06);color:var(--text-muted);letter-spacing:.04em}
-
-    /* Comparison */
-    .compare-table{width:100%;border-collapse:collapse;font-size:14px}
-    .compare-table th,.compare-table td{padding:14px 18px;text-align:center;border-bottom:1px solid var(--border)}
-    .compare-table th{color:var(--text-sec);font-weight:500;font-size:13px}
-    .compare-table th:first-child{text-align:left}
-    .compare-table td:first-child{text-align:left;font-weight:600;color:var(--text)}
-    .compare-table td{color:var(--text-sec)}
-    .compare-table .highlight-col{background:rgba(47,128,237,.06)}
-    .compare-table .highlight-col.highlight-header{background:rgba(47,128,237,.12);color:var(--blue-light);font-weight:700}
-    .check{color:#34D399;font-size:18px}
-    .cross{color:var(--text-muted);font-size:18px}
-
-    /* Providers */
-    .providers{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:48px}
-    .provider-tag{padding:8px 18px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:14px;color:var(--text-sec);transition:border-color .2s}
-    .provider-tag:hover{border-color:var(--blue);color:var(--text)}
-    .arch-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px;font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:13px;line-height:1.7;color:var(--text-sec);overflow-x:auto;white-space:pre}
-
-    /* CTA */
-    .cta{text-align:center;position:relative}
-    .cta::before{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(circle,rgba(47,128,237,.1) 0%,transparent 70%);pointer-events:none}
-    .cta .section-title{position:relative;z-index:1}
-    .cta .section-desc{margin-left:auto;margin-right:auto}
-    .cta-buttons{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;position:relative;z-index:1}
-
-    /* Steps */
-    .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:32px;margin-top:48px}
-    .step{text-align:center}
-    .step-num{width:48px;height:48px;border-radius:50%;background:rgba(47,128,237,.12);border:1px solid rgba(47,128,237,.25);display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--blue-light);margin-bottom:16px}
-    .step h3{font-size:15px;font-weight:600;margin-bottom:6px}
-    .step p{font-size:13px;color:var(--text-sec)}
-
-    /* Footer */
-    footer{padding:40px 24px;text-align:center;border-top:1px solid var(--border)}
-    footer p{font-size:13px;color:var(--text-muted)}
-    footer a{color:var(--blue-light);text-decoration:none}
-
-    /* Responsive */
-    @media(max-width:1024px){.features-grid{grid-template-columns:repeat(2,1fr)}}
-    @media(max-width:640px){
-      .nav-links .nav-text{display:none}
-      .features-grid{grid-template-columns:1fr}
-      .hero-buttons,.cta-buttons{flex-direction:column;align-items:center}
-    }
-  </style>
-</head>
-<body>
-
-<!-- Nav -->
-<nav id="nav">
-  <div class="nav-inner">
-    <a href="#" class="logo">
-      <svg width="32" height="32" viewBox="0 0 40 40"><rect x="2" y="2" width="36" height="36" rx="10" fill="#2F80ED"/><text x="20" y="25" text-anchor="middle" font-family="Arial" font-size="14" font-weight="700" fill="#fff">AI</text></svg>
-      CodePlanGUI
-    </a>
-    <div class="nav-links">
-      <a href="#features" class="nav-text">功能</a>
-      <a href="#compatible" class="nav-text">兼容</a>
-      <a href="#quickstart" class="nav-text">快速开始</a>
-      <a href="https://github.com/genni613/CodePlanGUI" target="_blank" class="btn btn-outline">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        GitHub
-      </a>
-    </div>
-  </div>
-</nav>
-
-<!-- Hero -->
-<section class="hero">
-  <div class="hero-content">
-    <div class="badge"><span class="dot"></span>内测开放中</div>
-    <h1>不被厂商定义的<br><span class="highlight">IDE AI 工作站</span></h1>
-    <p>用你已有的 Coding Plan，在 IDEA 里获得完整的 AI 编码体验 — 流式对话、代码补全、Commit 生成、多步 Agent 工作流，不绑定任何模型厂商。</p>
-    <div class="hero-buttons">
-      <a href="https://github.com/genni613/CodePlanGUI" target="_blank" class="btn btn-primary">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        加入内测
-      </a>
-      <a href="#features" class="btn btn-outline">了解更多</a>
-    </div>
-    <p class="hero-sub">无需注册账号 · 你的 Key 你做主 · MIT 开源协议</p>
-  </div>
-</section>
-
-<!-- Features -->
-<section id="features">
-  <div class="container">
-    <p class="section-label">已实现功能</p>
-    <h2 class="section-title">为 IDEA 而生的 AI 体验</h2>
-    <p class="section-desc">以下所有功能均已实现，开箱即用。不画饼，只交付。</p>
-    <div class="features-grid">
-
-      <div class="feature-card">
-        <div class="feature-icon">💬</div>
-        <h3>流式 Chat</h3>
-        <p>SSE 逐 token 输出，Markdown 渲染 + 代码高亮。</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">✨</div>
-        <h3>Commit Message</h3>
-        <p>一键读取暂存区 diff，生成 Conventional Commits。</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">🔌</div>
-        <h3>多 Provider</h3>
-        <p>任意 OpenAI 兼容接口，支持连接测试。</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">🖱️</div>
-        <h3>Ask AI</h3>
-        <p>右键选中代码直接提问，告别复制粘贴。</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">🛡️</div>
-        <h3>命令权限控制</h3>
-        <p>白名单 + 用户审批 + 工作区路径保护。</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">🔒</div>
-        <h3>安全存储</h3>
-        <p>API Key 存入 PasswordSafe，明文不落盘。</p>
-      </div>
-
-      <!-- Planned -->
-      <div class="feature-card feature-planned">
-        <div class="feature-icon">✏️</div>
-        <span class="planned-badge">开发中</span>
-        <h3>内联补全</h3>
-        <p>光标停留触发 AI 建议，Tab 接受。</p>
-      </div>
-
-      <div class="feature-card feature-planned">
-        <div class="feature-icon">🤖</div>
-        <span class="planned-badge">开发中</span>
-        <h3>异构 Agent</h3>
-        <p>每个节点绑定不同 Provider，按需分配模型。</p>
-      </div>
-
-      <div class="feature-card feature-planned">
-        <div class="feature-icon">🔌</div>
-        <span class="planned-badge">开发中</span>
-        <h3>MCP Server</h3>
-        <p>管理 MCP Servers，AI 自动发现外部工具。</p>
-      </div>
-
-      <div class="feature-card feature-planned">
-        <div class="feature-icon">📊</div>
-        <span class="planned-badge">开发中</span>
-        <h3>用量统计</h3>
-        <p>Token 用量与费用估算，辅助 Provider 选型。</p>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- Why CodePlanGUI -->
-<section id="why" style="background:var(--surface)">
-  <div class="container">
-    <p class="section-label">为什么选择 CodePlanGUI</p>
-    <h2 class="section-title">不被厂商绑架的 IDE AI 助手</h2>
-    <p class="section-desc">通义灵码有 IDE 集成但锁定自家模型；Claude Code GUI 能力强但绑定 Anthropic 协议。CodePlanGUI 兼得两者之长。</p>
-    <div style="overflow-x:auto;border-radius:14px;border:1px solid var(--border)">
-      <table class="compare-table">
-        <thead>
-          <tr>
-            <th></th>
-            <th class="highlight-col highlight-header">CodePlanGUI</th>
-            <th>通义灵码 / Copilot</th>
-            <th>Claude Code GUI</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>接入任意 OpenAI 兼容模型</td>
-            <td class="highlight-col"><span class="check">✓</span> DeepSeek / 千问 / 豆包 / Ollama…</td>
-            <td><span class="cross">✗</span> 绑定自家模型</td>
-            <td><span class="cross">✗</span> 仅 Anthropic 协议</td>
-          </tr>
-          <tr>
-            <td>Chat 侧边栏 + 代码高亮</td>
-            <td class="highlight-col"><span class="check">✓</span></td>
-            <td><span class="check">✓</span></td>
-            <td><span class="check">✓</span></td>
-          </tr>
-          <tr>
-            <td>Commit Message 生成</td>
-            <td class="highlight-col"><span class="check">✓</span></td>
-            <td><span class="check">✓</span></td>
-            <td><span class="cross">✗</span></td>
-          </tr>
-          <tr>
-            <td>命令执行 + 权限审批</td>
-            <td class="highlight-col"><span class="check">✓</span></td>
-            <td><span class="cross">✗</span></td>
-            <td><span class="check">✓</span></td>
-          </tr>
-          <tr>
-            <td>本地 Ollama / 私有部署</td>
-            <td class="highlight-col"><span class="check">✓</span></td>
-            <td><span class="cross">✗</span></td>
-            <td><span class="cross">✗</span></td>
-          </tr>
-          <tr>
-            <td>零服务器 / Key 不上传</td>
-            <td class="highlight-col"><span class="check">✓</span></td>
-            <td><span class="cross">✗</span></td>
-            <td><span class="cross">✗</span></td>
-          </tr>
-          <tr>
-            <td>异构多节点 Agent（开发中）</td>
-            <td class="highlight-col"><span class="check">✓</span></td>
-            <td><span class="cross">✗</span></td>
-            <td><span class="cross">✗</span></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-<!-- Compatible -->
-<section id="compatible" style="background:var(--surface)">
-  <div class="container">
-    <p class="section-label">广泛兼容</p>
-    <h2 class="section-title">你的 API，你做主</h2>
-    <p class="section-desc">支持所有 OpenAI 兼容接口，已有 Key 即可使用，无需重新注册。</p>
-    <div class="providers">
-      <div class="provider-tag">OpenAI</div>
-      <div class="provider-tag">DeepSeek</div>
-      <div class="provider-tag">阿里百炼（千问）</div>
-      <div class="provider-tag">字节豆包</div>
-      <div class="provider-tag">本地 Ollama</div>
-      <div class="provider-tag">任何 OpenAI 兼容接口...</div>
-    </div>
-    <div class="arch-box">
-┌─────────────────────────────────────────────┐
-│  IntelliJ IDEA                               │
-│  ├── CodePlanGUI Tool Window (Chat)          │
-│  ├── Settings → Providers 管理               │
-│  ├── Git Commit → ✨ 生成提交信息            │
-│  └── JCEF Browser (React 19 + Ant Design 5) │
-│           ↕  Kotlin ↔ JS Bridge              │
-│           ↕  OkHttp SSE                      │
-└─────────────────────────────────────────────┘
-         ↓
-  你自己的 AI API (OpenAI 兼容)
-  阿里百炼 / 豆包 / DeepSeek / OpenAI / Ollama</div>
-  </div>
-</section>
-
-<!-- Quick Start -->
-<section id="quickstart">
-  <div class="container">
-    <p class="section-label">快速开始</p>
-    <h2 class="section-title">三步上手</h2>
-    <p class="section-desc">无需注册，无需绑定账号，几分钟即可开始使用。</p>
-    <div class="steps">
-      <div class="step">
-        <div class="step-num">1</div>
-        <h3>安装插件</h3>
-        <p>从 GitHub 下载 zip，Settings → Plugins → Install from Disk</p>
-      </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <h3>配置 Provider</h3>
-        <p>Settings → Tools → CodePlanGUI，填入你的 API Endpoint 和 Key</p>
-      </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <h3>开始对话</h3>
-        <p>打开右侧 Tool Window，开始和 AI 畅聊你的代码</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- CTA -->
-<section class="cta">
-  <div class="container">
-    <h2 class="section-title">欢迎加入内测</h2>
-    <p class="section-desc">CodePlanGUI 正在内测中，我们期待你的反馈与建议。在 GitHub 上 Star、提 Issue 或提交 PR，一起打造更好的 IDEA AI 插件。</p>
-    <div class="cta-buttons">
-      <a href="https://github.com/genni613/CodePlanGUI" target="_blank" class="btn btn-primary" style="padding:14px 32px;font-size:16px">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        前往 GitHub
-      </a>
-      <a href="https://github.com/genni613/CodePlanGUI/issues" target="_blank" class="btn btn-outline" style="padding:14px 32px;font-size:16px">反馈建议</a>
-    </div>
-  </div>
-</section>
-
-<!-- Footer -->
-<footer>
-  <p>CodePlanGUI · MIT License · Made with ♥ for developers</p>
-</footer>
-
-<!-- Nav scroll effect -->
-<script>
-(function(){
-  var nav=document.getElementById('nav');
-  window.addEventListener('scroll',function(){
-    nav.classList.toggle('scrolled',window.scrollY>40);
-  });
-
-  // Intersection Observer for fade-in
-  var cards=document.querySelectorAll('.feature-card,.step,.provider-tag');
-  var observer=new IntersectionObserver(function(entries){
-    entries.forEach(function(e){
-      if(e.isIntersecting){
-        e.target.style.opacity='1';
-        e.target.style.transform='translateY(0)';
-        observer.unobserve(e.target);
-      }
-    });
-  },{threshold:0.15});
-  cards.forEach(function(c){
-    c.style.opacity='0';
-    c.style.transform='translateY(20px)';
-    c.style.transition='opacity .5s ease,transform .5s ease';
-    observer.observe(c);
-  });
-})();
-</script>
-
-</body>
-</html>
+<!DOCTYPE html>               
+  <html lang="zh-CN">                                                                                                                                
+  <head>                                                                                                                                             
+    <meta charset="UTF-8">                                                                                                                           
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">                                                                           
+    <title>CodePlanGUI - 你的 IDEA AI 助手</title>                                                                                                   
+    <style>                                                                                                                                          
+      *{margin:0;padding:0;box-sizing:border-box}                                                                                                    
+      :root{                                                                                                                                         
+        --blue:#2F80ED;--blue-light:#5699F2;--blue-dark:#1A5FBB;                                                                                     
+        --bg:#0B0F1A;--surface:#111827;--surface-2:#1F2937;                                                                                          
+        --text:#F9FAFB;--text-sec:#9CA3AF;--text-muted:#6B7280;                                                                                      
+        --border:#1F2937;--accent:#38BDF8;                                                                                                           
+      }                                                                                                                                              
+      html{scroll-behavior:smooth}                                                                                                                   
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft                                       
+  YaHei',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}                                                        
+                                                                                                                                                     
+      /* Nav */                                                                                                                                      
+      nav{position:fixed;top:0;width:100%;z-index:100;padding:16px 0;transition:background .3s,box-shadow .3s}                                       
+      nav.scrolled{background:rgba(11,15,26,.92);backdrop-filter:blur(12px);box-shadow:0 1px 0 var(--border)}                                        
+      .nav-inner{max-width:1120px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}                        
+      .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;color:var(--text);text-decoration:none}                          
+      .logo svg{flex-shrink:0}                                                                                                                       
+      .nav-links{display:flex;gap:28px;align-items:center}                                                                                           
+      .nav-links a{color:var(--text-sec);text-decoration:none;font-size:14px;transition:color .2s}                                                   
+      .nav-links a:hover{color:var(--text)}                                                                                                          
+      .btn{display:inline-flex;align-items:center;gap:8px;padding:10px                                                                               
+  22px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;transition:all .2s;border:none;cursor:pointer}                          
+      .btn-primary{background:var(--blue);color:#fff}                                                                                                
+      .btn-primary:hover{background:var(--blue-light);transform:translateY(-1px);box-shadow:0 4px 16px rgba(47,128,237,.35)}                         
+      .btn-outline{background:transparent;color:var(--text);border:1px solid var(--border)}                                                          
+      .btn-outline:hover{border-color:var(--blue);color:var(--blue)}                                                                                 
+                                                                                                                                                     
+      /* Hero */                                                                                                                                     
+      .hero{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:120px 24px 80px;position:relative}     
+      .hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(c
+  ircle,rgba(47,128,237,.12) 0%,transparent 70%);pointer-events:none}                                                                                
+      .hero-content{max-width:720px;position:relative;z-index:1}                                                                                     
+      .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:99px;background:rgba(47,128,237,.12);border:1px solid     
+  rgba(47,128,237,.25);font-size:13px;color:var(--blue-light);margin-bottom:28px}                                                                    
+      .badge .dot{width:6px;height:6px;border-radius:50%;background:#34D399;animation:pulse 2s infinite}                                             
+      @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}                                                                                            
+      h1{font-size:clamp(36px,5.5vw,56px);font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-bottom:20px}                                 
+      h1 .highlight{background:linear-gradient(135deg,var(--blue),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;bac
+  kground-clip:text}                                                                                                                                 
+      .hero p{font-size:18px;color:var(--text-sec);max-width:540px;margin:0 auto 36px}                                                               
+      .hero-buttons{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}                                                                     
+      .hero-sub{margin-top:20px;font-size:13px;color:var(--text-muted)}                                                                              
+                                                                                                                                                     
+      /* Section shared */                                                                                                                           
+      section{padding:100px 24px}                                                                                                                    
+      .container{max-width:1120px;margin:0 auto}                                                                                                     
+      .section-label{font-size:13px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}              
+      .section-title{font-size:clamp(28px,4vw,40px);font-weight:700;margin-bottom:16px;letter-spacing:-.01em}                                        
+      .section-desc{font-size:16px;color:var(--text-sec);max-width:560px;margin-bottom:48px}                                                         
+                                                                                                                                                     
+      /* Features */                                                                                                                                 
+      .features-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}                                                                      
+      .feature-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;transition:border-color .25s,transform  
+  .25s}                                                                                                                                              
+      .feature-card:hover{border-color:rgba(47,128,237,.4);transform:translateY(-2px)}                                                               
+      .feature-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16p
+  x;background:rgba(47,128,237,.1)}                                                                                                                  
+      .feature-card h3{font-size:16px;font-weight:600;margin-bottom:8px}                                                                             
+      .feature-card p{font-size:14px;color:var(--text-sec);line-height:1.6}                                                                          
+      .feature-planned{opacity:.45;cursor:default;position:relative}                                                                                 
+      .feature-planned:hover{border-color:var(--border);transform:none}                                                                              
+      .planned-badge{position:absolute;top:16px;right:16px;padding:3px                                                                               
+  10px;border-radius:4px;font-size:11px;font-weight:600;background:rgba(255,255,255,.06);color:var(--text-muted);letter-spacing:.04em}               
+                                                                                                                                                     
+      /* Comparison */                                                                                                                               
+      .compare-table{width:100%;border-collapse:collapse;font-size:14px}                                                                             
+      .compare-table th,.compare-table td{padding:14px 18px;text-align:center;border-bottom:1px solid var(--border)}                                 
+      .compare-table th{color:var(--text-sec);font-weight:500;font-size:13px}                                                                        
+      .compare-table th:first-child{text-align:left}                                                                                                 
+      .compare-table td:first-child{text-align:left;font-weight:600;color:var(--text)}                                                               
+      .compare-table td{color:var(--text-sec)}                                                                                                       
+      .compare-table .highlight-col{background:rgba(47,128,237,.06)}                                                                                 
+      .compare-table .highlight-col.highlight-header{background:rgba(47,128,237,.12);color:var(--blue-light);font-weight:700}                        
+      .check{color:#34D399;font-size:18px}                                                                                                           
+      .cross{color:var(--text-muted);font-size:18px}                                                                                                 
+                                                                                                                                                     
+      /* Providers */                                                                                                                                
+      .providers{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:48px}                                                                            
+      .provider-tag{padding:8px 18px;border-radius:8px;background:var(--surface);border:1px solid                                                    
+  var(--border);font-size:14px;color:var(--text-sec);transition:border-color .2s}                                                                    
+      .provider-tag:hover{border-color:var(--blue);color:var(--text)}                                                                                
+      .arch-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px;font-family:'SF                             
+  Mono',SFMono-Regular,Consolas,'Liberation                                                                                                          
+  Mono',Menlo,monospace;font-size:13px;line-height:1.7;color:var(--text-sec);overflow-x:auto;white-space:pre}                                        
+                                                                                                                                                     
+      /* CTA */                                                                                                                                      
+      .cta{text-align:center;position:relative}                                                                                                      
+      .cta::before{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(circ
+  le,rgba(47,128,237,.1) 0%,transparent 70%);pointer-events:none}                                                                                    
+      .cta .section-title{position:relative;z-index:1}                                                                                               
+      .cta .section-desc{margin-left:auto;margin-right:auto}                                                                                         
+      .cta-buttons{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;position:relative;z-index:1}                                          
+                                                                                                                                                     
+      /* Steps */                                                                                                                                    
+      .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:32px;margin-top:48px}                                         
+      .step{text-align:center}                                                                                                                       
+      .step-num{width:48px;height:48px;border-radius:50%;background:rgba(47,128,237,.12);border:1px solid rgba(47,128,237,.25);display:inline-flex;al
+  ign-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--blue-light);margin-bottom:16px}                                 
+      .step h3{font-size:15px;font-weight:600;margin-bottom:6px}                                                                                     
+      .step p{font-size:13px;color:var(--text-sec)}                                                                                                  
+                                                                                                                                                     
+      /* Footer */                                                                                                                                   
+      footer{padding:40px 24px;text-align:center;border-top:1px solid var(--border)}                                                                 
+      footer p{font-size:13px;color:var(--text-muted)}                                                                                               
+      footer a{color:var(--blue-light);text-decoration:none}                                                                                         
+                                                                                                                                                     
+      /* Responsive */                                                                                                                               
+      @media(max-width:1024px){.features-grid{grid-template-columns:repeat(2,1fr)}}                                                                  
+      @media(max-width:640px){                                                                                                                       
+        .nav-links .nav-text{display:none}                                                                                                           
+        .features-grid{grid-template-columns:1fr}                                                                                                    
+        .hero-buttons,.cta-buttons{flex-direction:column;align-items:center}                                                                         
+      }                                                                                                                                              
+    </style>                                                                                                                                         
+  </head>                                                                                                                                            
+  <body>                                                                                                                                             
+                                                                                                                                                     
+  <!-- Nav -->                                                                                                                                       
+  <nav id="nav">                                                                                                                                     
+    <div class="nav-inner">                                                                                                                          
+      <a href="#" class="logo">                                                                                                                      
+        <svg width="32" height="32" viewBox="0 0 40 40"><rect x="2" y="2" width="36" height="36" rx="10" fill="#2F80ED"/><text x="20" y="25"         
+  text-anchor="middle" font-family="Arial" font-size="14" font-weight="700" fill="#fff">AI</text></svg>                                              
+        CodePlanGUI                                                                                                                                  
+      </a>                                                                                                                                           
+      <div class="nav-links">                                                                                                                        
+        <a href="#features" class="nav-text">功能</a>                                                                                                
+        <a href="#compatible" class="nav-text">兼容</a>                                                                                              
+        <a href="#quickstart" class="nav-text">快速开始</a>                                                                                          
+        <a href="https://github.com/TuYv/CodePlanGUI" target="_blank" class="btn btn-outline">                                                   
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205             
+  11.385.6.105.825-.255.825-.57                                                                                                                      
+  0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23  
+  1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0  
+  1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0    
+  4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024                      
+  12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub                                                                                                                                     
+        </a>                                                                                                                                         
+      </div>                                                                                                                                         
+    </div>                                                                                                                                           
+  </nav>                                                                                                                                             
+                                                                                                                                                     
+  <!-- Hero -->                                                                                                                                      
+  <section class="hero">                                                                                                                             
+    <div class="hero-content">                                                                                                                       
+      <div class="badge"><span class="dot"></span>内测开放中</div>                                                                                   
+      <h1>不被厂商定义的<br><span class="highlight">IDE AI 工作站</span></h1>                                                                        
+      <p>用你已有的 Coding Plan，在 IDEA 里获得完整的 AI 编码体验 — 流式对话、代码补全、Commit 生成、多步 Agent 工作流，不绑定任何模型厂商。</p>     
+      <div class="hero-buttons">                                                                                                                     
+        <a href="https://github.com/TuYv/CodePlanGUI" target="_blank" class="btn btn-primary">                                                   
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205             
+  11.385.6.105.825-.255.825-.57                                                                                                                      
+  0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23  
+  1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0  
+  1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0    
+  4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024                      
+  12c0-6.63-5.37-12-12-12z"/></svg>
+          加入内测                                                                                                                                   
+        </a>                                                                                                                                         
+        <a href="#features" class="btn btn-outline">了解更多</a>                                                                                     
+      </div>                                                                                                                                         
+      <p class="hero-sub">无需注册账号 · 你的 Key 你做主 · MIT 开源协议</p>                                                                          
+    </div>                                                                                                                                           
+  </section>                                                                                                                                         
+                                                                                                                                                     
+  <!-- Features -->                                                                                                                                  
+  <section id="features">                                                                                                                            
+    <div class="container">                                                                                                                          
+      <p class="section-label">已实现功能</p>                                                                                                        
+      <h2 class="section-title">为 IDEA 而生的 AI 体验</h2>                                                                                          
+      <p class="section-desc">以下所有功能均已实现，开箱即用。不画饼，只交付。</p>                                                                   
+      <div class="features-grid">                                                                                                                    
+                                                                                                                                                     
+        <div class="feature-card">                                                                                                                   
+          <div class="feature-icon">💬</div>                                                                                                         
+          <h3>流式 Chat</h3>                                                                                                                         
+          <p>SSE 逐 token 输出，Markdown 渲染 + 代码高亮。</p>                                                                                       
+        </div>                                                                                                                                       
+                                                                                                                                                     
+        <div class="feature-card">                                                                                                                   
+          <div class="feature-icon">✨</div>                                                                                                         
+          <h3>Commit Message</h3>                                                                                                                    
+          <p>一键读取暂存区 diff，生成 Conventional Commits。</p>                                                                                    
+        </div>                                                                                                                                       
+                                                                                                                                                     
+        <div class="feature-card">                                                                                                                   
+          <div class="feature-icon">🔌</div>                                                                                                         
+          <h3>多 Provider</h3>                                                                                                                       
+          <p>任意 OpenAI 兼容接口，支持连接测试。</p>                                                                                                
+        </div>                                                                                                                                       
+                                                                                                                                                     
+        <div class="feature-card">                                                                                                                   
+          <div class="feature-icon">🖱️ </div>                                                                                                         
+          <h3>Ask AI</h3>                                                                                                                            
+          <p>右键选中代码直接提问，告别复制粘贴。</p>                                                                                                
+        </div>                                                                                                                                       
+                                                                                                                                                     
+        <div class="feature-card">                                                                                                                   
+          <div class="feature-icon">🛡️ </div>                                                                                                         
+          <h3>命令权限控制</h3>                                                                                                                      
+          <p>白名单 + 用户审批 + 工作区路径保护。</p>                                                                                                
+        </div>                                                                                                                                       
+                                                                                                                                                     
+        <div class="feature-card">                                                                                                                   
+          <div class="feature-icon">🔒</div>                                                                                                         
+          <h3>安全存储</h3>                                                                                                                          
+          <p>API Key 存入 PasswordSafe，明文不落盘。</p>                                                                                             
+        </div>                                                                                                                                       
+                                                                                                                                                     
+        <!-- Planned -->                                                                                                                             
+        <div class="feature-card feature-planned">                                                                                                   
+          <div class="feature-icon">✏️ </div>                                                                                                         
+          <span class="planned-badge">开发中</span>                                                                                                  
+          <h3>内联补全</h3>                                                                                                                          
+          <p>光标停留触发 AI 建议，Tab 接受。</p>                                                                                                    
+        </div>                                                                                                                                       
+                                                                                                                                                     
+        <div class="feature-card feature-planned">                                                                                                   
+          <div class="feature-icon">🤖</div>                                                                                                         
+          <span class="planned-badge">开发中</span>                                                                                                  
+          <h3>异构 Agent</h3>                                                                                                                        
+          <p>每个节点绑定不同 Provider，按需分配模型。</p>                                                                                           
+        </div>                                                                                                                                       
+                                                                                                                                                     
+        <div class="feature-card feature-planned">                                                                                                   
+          <div class="feature-icon">🔌</div>                                                                                                         
+          <span class="planned-badge">开发中</span>                                                                                                  
+          <h3>MCP Server</h3>                                                                                                                        
+          <p>管理 MCP Servers，AI 自动发现外部工具。</p>                                                                                             
+        </div>                                                                                                                                       
+                                                                                                                                                     
+        <div class="feature-card feature-planned">                                                                                                   
+          <div class="feature-icon">📊</div>                                                                                                         
+          <span class="planned-badge">开发中</span>                                                                                                  
+          <h3>用量统计</h3>                                                                                                                          
+          <p>Token 用量与费用估算，辅助 Provider 选型。</p>                                                                                          
+        </div>                                                                                                                                       
+                                                                                                                                                     
+      </div>                                                                                                                                         
+    </div>                                                                                                                                           
+  </section>                                                                                                                                         
+                                                                                                                                                     
+  <!-- Why CodePlanGUI -->                                                                                                                           
+  <section id="why" style="background:var(--surface)">                                                                                               
+    <div class="container">                                                                                                                          
+      <p class="section-label">为什么选择 CodePlanGUI</p>                                                                                            
+      <h2 class="section-title">不被厂商绑架的 IDE AI 助手</h2>                                                                                      
+      <p class="section-desc">通义灵码有 IDE 集成但锁定自家模型；Claude Code GUI 能力强但绑定 Anthropic 协议。CodePlanGUI 兼得两者之长。</p>         
+      <div style="overflow-x:auto;border-radius:14px;border:1px solid var(--border)">                                                                
+        <table class="compare-table">                                                                                                                
+          <thead>                                                                                                                                    
+            <tr>                                                                                                                                     
+              <th></th>                                                                                                                              
+              <th class="highlight-col highlight-header">CodePlanGUI</th>                                                                            
+              <th>通义灵码 / Copilot</th>                                                                                                            
+              <th>Claude Code GUI</th>                                                                                                               
+            </tr>                                                                                                                                    
+          </thead>                                                                                                                                   
+          <tbody>                                                                                                                                    
+            <tr>                                                                                                                                     
+              <td>接入任意 OpenAI 兼容模型</td>                                                                                                      
+              <td class="highlight-col"><span class="check">✓</span> DeepSeek / 千问 / 豆包 / Ollama…</td>                                           
+              <td><span class="cross">✗</span> 绑定自家模型</td>                                                                                     
+              <td><span class="cross">✗</span> 仅 Anthropic 协议</td>                                                                                
+            </tr>                                                                                                                                    
+            <tr>                                                                                                                                     
+              <td>Chat 侧边栏 + 代码高亮</td>                                                                                                        
+              <td class="highlight-col"><span class="check">✓</span></td>                                                                            
+              <td><span class="check">✓</span></td>                                                                                                  
+              <td><span class="check">✓</span></td>                                                                                                  
+            </tr>                                                                                                                                    
+            <tr>                                                                                                                                     
+              <td>Commit Message 生成</td>                                                                                                           
+              <td class="highlight-col"><span class="check">✓</span></td>                                                                            
+              <td><span class="check">✓</span></td>                                                                                                  
+              <td><span class="cross">✗</span></td>                                                                                                  
+            </tr>                                                                                                                                    
+            <tr>                                                                                                                                     
+              <td>命令执行 + 权限审批</td>                                                                                                           
+              <td class="highlight-col"><span class="check">✓</span></td>                                                                            
+              <td><span class="cross">✗</span></td>                                                                                                  
+              <td><span class="check">✓</span></td>                                                                                                  
+            </tr>                                                                                                                                    
+            <tr>                                                                                                                                     
+              <td>本地 Ollama / 私有部署</td>                                                                                                        
+              <td class="highlight-col"><span class="check">✓</span></td>                                                                            
+              <td><span class="cross">✗</span></td>                                                                                                  
+              <td><span class="cross">✗</span></td>                                                                                                  
+            </tr>                                                                                                                                    
+            <tr>                                                                                                                                     
+              <td>零服务器 / Key 不上传</td>                                                                                                         
+              <td class="highlight-col"><span class="check">✓</span></td>                                                                            
+              <td><span class="cross">✗</span></td>                                                                                                  
+              <td><span class="cross">✗</span></td>                                                                                                  
+            </tr>                                                                                                                                    
+            <tr>                                                                                                                                     
+              <td>异构多节点 Agent（开发中）</td>                                                                                                    
+              <td class="highlight-col"><span class="check">✓</span></td>                                                                            
+              <td><span class="cross">✗</span></td>                                                                                                  
+              <td><span class="cross">✗</span></td>                                                                                                  
+            </tr>                                                                                                                                    
+          </tbody>                                                                                                                                   
+        </table>                                                                                                                                     
+      </div>                                                                                                                                         
+    </div>                                                                                                                                           
+  </section>                                                                                                                                         
+                                                                                                                                                     
+  <!-- Compatible -->                                                                                                                                
+  <section id="compatible" style="background:var(--surface)">                                                                                        
+    <div class="container">                                                                                                                          
+      <p class="section-label">广泛兼容</p>                                                                                                          
+      <h2 class="section-title">你的 API，你做主</h2>                                                                                                
+      <p class="section-desc">支持所有 OpenAI 兼容接口，已有 Key 即可使用，无需重新注册。</p>                                                        
+      <div class="providers">                                                                                                                        
+        <div class="provider-tag">OpenAI</div>                                                                                                       
+        <div class="provider-tag">DeepSeek</div>                                                                                                     
+        <div class="provider-tag">阿里百炼（千问）</div>                                                                                             
+        <div class="provider-tag">字节豆包</div>                                                                                                     
+        <div class="provider-tag">本地 Ollama</div>                                                                                                  
+        <div class="provider-tag">任何 OpenAI 兼容接口...</div>                                                                                      
+      </div>                                                                                                                                         
+      <div class="arch-box">                                                                                                                         
+  ┌─────────────────────────────────────────────┐                                                                                                    
+  │  IntelliJ IDEA                               │                                                                                                   
+  │  ├── CodePlanGUI Tool Window (Chat)          │                                                                                                   
+  │  ├── Settings → Providers 管理               │                                                                                                   
+  │  ├── Git Commit → ✨ 生成提交信息            │                                                                                                   
+  │  └── JCEF Browser (React 19 + Ant Design 5) │                                                                                                    
+  │           ↕  Kotlin ↔ JS Bridge              │                                                                                                   
+  │           ↕  OkHttp SSE                      │                                                                                                   
+  └─────────────────────────────────────────────┘                                                                                                    
+           ↓                                                                                                                                         
+    你自己的 AI API (OpenAI 兼容)                                                                                                                    
+    阿里百炼 / 豆包 / DeepSeek / OpenAI / Ollama</div>                                                                                               
+    </div>                                                                                                                                           
+  </section>                                                                                                                                         
+                                                                                                                                                     
+  <!-- Quick Start -->                                                                                                                               
+  <section id="quickstart">                                                                                                                          
+    <div class="container">                                                                                                                          
+      <p class="section-label">快速开始</p>                                                                                                          
+      <h2 class="section-title">三步上手</h2>                                                                                                        
+      <p class="section-desc">无需注册，无需绑定账号，几分钟即可开始使用。</p>                                                                       
+      <div class="steps">                                                                                                                            
+        <div class="step">                                                                                                                           
+          <div class="step-num">1</div>                                                                                                              
+          <h3>安装插件</h3>                                                                                                                          
+          <p>从 GitHub 下载 zip，Settings → Plugins → Install from Disk</p>                                                                          
+        </div>                                                                                                                                       
+        <div class="step">                                                                                                                           
+          <div class="step-num">2</div>                                                                                                              
+          <h3>配置 Provider</h3>                                                                                                                     
+          <p>Settings → Tools → CodePlanGUI，填入你的 API Endpoint 和 Key</p>                                                                        
+        </div>                                                                                                                                       
+        <div class="step">                                                                                                                           
+          <div class="step-num">3</div>                                                                                                              
+          <h3>开始对话</h3>                                                                                                                          
+          <p>打开右侧 Tool Window，开始和 AI 畅聊你的代码</p>                                                                                        
+        </div>                                                                                                                                       
+      </div>                                                                                                                                         
+    </div>                                                                                                                                           
+  </section>                                                                                                                                         
+                                                                                                                                                     
+  <!-- CTA -->                                                                                                                                       
+  <section class="cta">                                                                                                                              
+    <div class="container">                                                                                                                          
+      <h2 class="section-title">欢迎加入内测</h2>                                                                                                    
+      <p class="section-desc">CodePlanGUI 正在内测中，我们期待你的反馈与建议。在 GitHub 上 Star、提 Issue 或提交 PR，一起打造更好的 IDEA AI          
+  插件。</p>                                                                                                                                         
+      <div class="cta-buttons">                                                                                                                      
+        <a href="https://github.com/TuYv/CodePlanGUI" target="_blank" class="btn btn-primary" style="padding:14px 32px;font-size:16px">          
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205             
+  11.385.6.105.825-.255.825-.57                                                                                                                      
+  0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23  
+  1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0  
+  1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0    
+  4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024                      
+  12c0-6.63-5.37-12-12-12z"/></svg>
+          前往 GitHub                                                                                                                                
+        </a>                                                                                                                                         
+        <a href="https://github.com/TuYv/CodePlanGUI/issues" target="_blank" class="btn btn-outline" style="padding:14px                         
+  32px;font-size:16px">反馈建议</a>                                                                                                                  
+      </div>                                                                                                                                         
+    </div>                                                                                                                                           
+  </section>                                                                                                                                         
+                                                                                                                                                     
+  <!-- Footer -->                                                                                                                                    
+  <footer>                                                                                                                                           
+    <p>CodePlanGUI · MIT License · Made with ♥ for developers</p>                                                                                    
+  </footer>                                                                                                                                          
+                                                                                                                                                     
+  <!-- Nav scroll effect -->                                                                                                                         
+  <script>                                                                                                                                           
+  (function(){                                                                                                                                       
+    var nav=document.getElementById('nav');                                                                                                          
+    window.addEventListener('scroll',function(){                                                                                                     
+      nav.classList.toggle('scrolled',window.scrollY>40);                                                                                            
+    });                                                                                                                                              
+                                                                                                                                                     
+    // Intersection Observer for fade-in                                                                                                             
+    var cards=document.querySelectorAll('.feature-card,.step,.provider-tag');                                                                        
+    var observer=new IntersectionObserver(function(entries){                                                                                         
+      entries.forEach(function(e){                                                                                                                   
+        if(e.isIntersecting){                                                                                                                        
+          e.target.style.opacity='1';                                                                                                                
+          e.target.style.transform='translateY(0)';                                                                                                  
+          observer.unobserve(e.target);                                                                                                              
+        }                                                                                                                                            
+      });                                                                                                                                            
+    },{threshold:0.15});                                                                                                                             
+    cards.forEach(function(c){                                                                                                                       
+      c.style.opacity='0';                                                                                                                           
+      c.style.transform='translateY(20px)';                                                                                                          
+      c.style.transition='opacity .5s ease,transform .5s ease';                                                                                      
+      observer.observe(c);                                                                                                                           
+    });                                                                                                                                              
+  })();                                                                                                                                              
+  </script>                                                                                                                                          
+                                                                                                                                                     
+  </body>                                                                                                                                            
+  </html>     
