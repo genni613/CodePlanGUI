@@ -8,14 +8,14 @@
 
 ## Background
 
-CodePlanGUI uses a Kotlin backend communicating with a React frontend via JBCefJSQuery. Currently, 13 independent callbacks (`onStart`, `onToken`, `onEnd`, etc.) are registered on `window.__bridge`. Each callback independently updates React state via `useState`. This creates several problems:
+CodePlanGUI uses a Kotlin backend communicating with a React frontend via JBCefJSQuery. Currently, 15 independent callbacks (`onStart`, `onToken`, `onEnd`, `onError`, `onStructuredError`, `onContextFile`, `onTheme`, `onStatus`, `onExecutionCard`, `onApprovalRequest`, `onExecutionStatus`, `onRestoreMessages`, `onLog`, `onContinuation`, `onRemoveMessage`) are registered on `window.__bridge`. Each callback independently updates React state via `useState`. This creates several problems:
 
-1. **State logic scattered** across 13 `useCallback` hooks in App.tsx, making it hard to reason about state transitions.
+1. **State logic scattered** across 15 `useCallback` hooks in App.tsx, making it hard to reason about state transitions.
 2. **Ordering hacks** in `ChatService.kt` (lazy `notifyStart` + `notifyRemoveMessage` + `bridgeNotifiedStart` set) to ensure execution cards appear before the final assistant text bubble.
 3. **Poor extensibility** — adding reasoning support or multi-round tool calls requires more callbacks and more hacks.
 
 This design introduces two changes in sequence:
-- **Phase 1:** Unified event channel — single `onEvent(type, payload)` replacing 13 callbacks.
+- **Phase 1:** Unified event channel — single `onEvent(type, payload)` replacing 15 callbacks.
 - **Phase 2:** Frontend message grouping — `MessageGroup[]` replacing flat `Message[]` for rendering, eliminating backend ordering hacks.
 
 ---
@@ -39,7 +39,7 @@ Event types map 1:1 from existing callbacks:
 | `end` | `{msgId: string}` | `onEnd` |
 | `round_end` | `{msgId: string}` | *(new)* — round ended with tool_calls, not final |
 | `error` | `{message: string}` | `onError` |
-| `structured_error` | `{type: string, message: string}` | `onStructuredError` |
+| `structured_error` | `{type: string, message: string, action?: string}` | `onStructuredError` |
 | `status` | `{providerName, model, connectionState, contextFile}` | `onStatus` |
 | `context_file` | `{fileName: string}` | `onContextFile` |
 | `theme` | `{mode: "dark" \| "light"}` | `onTheme` |
@@ -49,7 +49,7 @@ Event types map 1:1 from existing callbacks:
 | `log` | `{requestId, line, type}` | `onLog` |
 | `continuation` | `{current: number, max: number}` | `onContinuation` |
 | `remove_message` | `{msgId: string}` | `onRemoveMessage` — kept for Phase 1, removable in Phase 2 |
-| `restore_messages` | `{messages: [...]}` | `onRestoreMessages` |
+| `restore_messages` | `{messages: string}` (JSON-encoded array) | `onRestoreMessages` |
 
 Note: `round_end` is introduced in Phase 1 as a no-op placeholder so Phase 2 can consume it without another Kotlin change. In Phase 1 the backend never emits it.
 
@@ -57,48 +57,48 @@ Note: `round_end` is introduced in Phase 1 as a no-op placeholder so Phase 2 can
 
 **File:** `BridgeHandler.kt`
 
-Add a core method:
+Add a core method that produces a JS string (does not execute it — the caller decides dispatch strategy):
 
 ```kotlin
-private fun dispatchEvent(type: String, payload: String) {
-    val escapedPayload = JSONObject.quote(payload)
-    pushJS("window.__bridge.onEvent('$type', $escapedPayload)")
+private fun buildEventJS(type: String, payload: String): String {
+    // Use project's existing kotlinx.serialization for safe JSON encoding
+    val jsonPayload = Json.encodeToString(payload)
+    return "window.__bridge.onEvent('${type}', $jsonPayload)"
 }
 ```
 
-Each existing `notifyXxx` method changes its internal implementation to call `dispatchEvent` while keeping the same public signature. Dispatch strategy (immediate vs batched) remains unchanged:
+Each existing `notifyXxx` method changes its internal implementation to call `buildEventJS` while keeping the same public signature. Dispatch strategy (immediate vs batched) remains unchanged:
 
 | Method | Strategy | Dispatches |
 |---|---|---|
-| `notifyStart` | `flushAndPush` (immediate) | `dispatchEvent("start", ...)` |
-| `notifyToken` | `enqueueJS` (batched 16ms) | `dispatchEvent("token", ...)` |
-| `notifyEnd` | `flushAndPush` | `dispatchEvent("end", ...)` |
-| `notifyError` | `flushAndPush` | `dispatchEvent("error", ...)` |
-| `notifyStructuredError` | `flushAndPush` | `dispatchEvent("structured_error", ...)` |
-| `notifyExecutionCard` | `flushAndPush` | `dispatchEvent("execution_card", ...)` |
-| `notifyApprovalRequest` | `flushAndPush` | `dispatchEvent("approval_request", ...)` |
-| `notifyExecutionStatus` | `flushAndPush` | `dispatchEvent("execution_status", ...)` |
-| `notifyLog` | `enqueueJS` | `dispatchEvent("log", ...)` |
-| `notifyContinuation` | `pushJS` | `dispatchEvent("continuation", ...)` |
-| `notifyRemoveMessage` | `flushAndPush` | `dispatchEvent("remove_message", ...)` |
-| `notifyRestoreMessages` | `flushAndPush` | `dispatchEvent("restore_messages", ...)` |
-| `notifyStatus` | `flushAndPush` | `dispatchEvent("status", ...)` |
-| `notifyContextFile` | `flushAndPush` | `dispatchEvent("context_file", ...)` |
-| `notifyTheme` | `flushAndPush` | `dispatchEvent("theme", ...)` |
+| `notifyStart` | `flushAndPush` (immediate, flushes pending batch first) | `flushAndPush(buildEventJS("start", ...))` |
+| `notifyToken` | `enqueueJS` (batched 16ms) | `enqueueJS(buildEventJS("token", ...))` |
+| `notifyEnd` | `flushAndPush` | `flushAndPush(buildEventJS("end", ...))` |
+| `notifyError` | `flushAndPush` | `flushAndPush(buildEventJS("error", ...))` |
+| `notifyStructuredError` | `flushAndPush` | `flushAndPush(buildEventJS("structured_error", ...))` |
+| `notifyExecutionCard` | `flushAndPush` | `flushAndPush(buildEventJS("execution_card", ...))` |
+| `notifyApprovalRequest` | `flushAndPush` | `flushAndPush(buildEventJS("approval_request", ...))` |
+| `notifyExecutionStatus` | `flushAndPush` | `flushAndPush(buildEventJS("execution_status", ...))` |
+| `notifyLog` | `enqueueJS` | `enqueueJS(buildEventJS("log", ...))` |
+| `notifyContinuation` | `pushJS` (immediate, no flush) | `pushJS(buildEventJS("continuation", ...))` |
+| `notifyRemoveMessage` | `flushAndPush` | `flushAndPush(buildEventJS("remove_message", ...))` |
+| `notifyRestoreMessages` | `flushAndPush` | `flushAndPush(buildEventJS("restore_messages", ...))` |
+| `notifyStatus` | `flushAndPush` | `flushAndPush(buildEventJS("status", ...))` |
+| `notifyContextFile` | `pushJS` (immediate, no flush) | `pushJS(buildEventJS("context_file", ...))` |
+| `notifyTheme` | `pushJS` (immediate, no flush) | `pushJS(buildEventJS("theme", ...))` |
+
+Note: `pushJS` sends immediately without flushing the pending batch. This is the current behavior for `notifyContextFile` and `notifyTheme` and is preserved as-is. These events are non-critical and do not need to be ordered relative to pending tokens.
 
 **New method for Phase 2 readiness:**
 
 ```kotlin
-fun notifyRoundEnd(msgId: String) {
-    flushAndPush { dispatchEvent("round_end", """{"msgId":"$msgId"}""") }
-}
+fun notifyRoundEnd(msgId: String) =
+    flushAndPush(buildEventJS("round_end", """{"msgId":"$msgId"}"""))
 ```
 
 This method is added in Phase 1 but not called. Phase 2 activates it.
 
-**Important implementation detail:** `dispatchEvent` must handle the batching distinction. For `enqueueJS`-based methods, the `dispatchEvent` call should be queued in the same batch buffer. For `flushAndPush`-based methods, it flushes the buffer first then pushes immediately. This preserves the current ordering guarantee: structural events always appear after all pending tokens.
-
-The simplest approach: `dispatchEvent` itself just produces the JS string. The caller (`notifyXxx`) decides whether to `enqueueJS` or `flushAndPush` that string, exactly as today.
+**Important implementation detail:** `buildEventJS` only produces the JS string — it does not execute it. The caller (`notifyXxx`) decides whether to pass it to `enqueueJS`, `flushAndPush`, or `pushJS`, exactly as today. This preserves the current ordering guarantee: structural events always flush pending tokens before executing.
 
 **`ChatService.kt`: Zero changes.** It continues calling `bridgeHandler?.notifyStart(msgId)`, etc.
 
@@ -126,37 +126,57 @@ interface Bridge {
 
 **File:** `useBridge.ts`
 
-Replace 13 individual callback registrations with a single `onEvent` handler:
+Replace 15 individual callback registrations with a single `onEvent` handler. The existing `bridge_ready` lifecycle and action method injection pattern is preserved — only the event-receiving side changes.
 
 ```typescript
 type EventHandler = (type: string, payload: any) => void
 
 export function useBridge(onEvent: EventHandler): boolean {
-  // Register the single handler on mount
-  useEffect(() => {
-    window.__bridge = {
-      onEvent: (type: string, payloadJson: string) => {
-        try {
-          const payload = JSON.parse(payloadJson)
-          onEvent(type, payload)
-        } catch {
-          // ignore malformed events
-        }
-      },
-      // Action method stubs (populated by BridgeHandler injection)
-      sendMessage: () => {},
-      approvalResponse: () => {},
-      cancelStream: () => {},
-      newChat: () => {},
-      openSettings: () => {},
-      debugLog: () => {},
-      frontendReady: () => {},
-    }
-  }, [onEvent])
+  const [bridgeReady, setBridgeReady] = useState(false)
+  const frontendReadySentRef = useRef(false)
+  const onEventRef = useRef(onEvent)
+  onEventRef.current = onEvent
 
-  // ... bridge_ready lifecycle, frontendReady signal, etc. — unchanged
+  const setup = useCallback(() => {
+    // Do NOT overwrite window.__bridge entirely.
+    // BridgeHandler injects action methods (sendMessage, approvalResponse, etc.)
+    // via JBCefJSQuery. We only set the onEvent handler on the existing object,
+    // or create a stub object if BridgeHandler hasn't injected yet.
+    if (!window.__bridge) {
+      window.__bridge = {} as any
+    }
+    window.__bridge.onEvent = (type: string, payloadJson: string) => {
+      try {
+        const payload = JSON.parse(payloadJson)
+        onEventRef.current(type, payload)
+      } catch (e) {
+        console.warn(`[CodePlanGUI] Failed to parse event payload: type=${type}`, e)
+      }
+    }
+    setBridgeReady(true)
+
+    // Send frontendReady signal if not already sent
+    if (!frontendReadySentRef.current && window.__bridge.frontendReady) {
+      frontendReadySentRef.current = true
+      window.__bridge.frontendReady()
+    }
+  }, [])
+
+  useEffect(() => {
+    setup()
+    // Listen for bridge_ready event (fired by BridgeHandler after JS injection)
+    document.addEventListener("bridge_ready", setup)
+    return () => document.removeEventListener("bridge_ready", setup)
+  }, [setup])
+
+  return bridgeReady
 }
 ```
+
+Key differences from the current implementation:
+- 15 individual callback params (`onStart`, `onToken`, etc.) are replaced by a single `onEvent` handler.
+- The `onEventRef` pattern ensures the latest handler is always called without re-registering on every render.
+- The `bridge_ready` event listener, `frontendReady` signal, and `bridgeReady` state are all preserved.
 
 ### 1.5 Frontend: eventReducer
 
@@ -226,7 +246,7 @@ export function eventReducer(state: AppState, type: string, payload: any): AppSt
         messages: state.messages.map(m =>
           m.isStreaming ? { ...m, isStreaming: false } : m
         ),
-        error: { type: payload.type, message: payload.message },
+        error: { type: payload.type, message: payload.message, action: payload.action },
       }
 
     case "execution_card":
@@ -283,7 +303,10 @@ export function eventReducer(state: AppState, type: string, payload: any): AppSt
       return { ...state, messages: state.messages.filter(m => m.id !== payload.msgId) }
 
     case "restore_messages":
-      return { ...state, messages: restoreFlatMessages(payload.messages) }
+      // payload.messages is a JSON-encoded string (double-encoded by the backend).
+      // The outer JSON.parse in useBridge already decoded the event payload,
+      // so payload.messages is a string that needs a second parse.
+      return { ...state, messages: restoreFlatMessages(JSON.parse(payload.messages)) }
 
     case "status":
       return { ...state, status: applyBridgeStatus(state.status, payload) }
@@ -302,15 +325,28 @@ export function eventReducer(state: AppState, type: string, payload: any): AppSt
 
 ### 1.6 Frontend: App.tsx Changes
 
-Replace 13 `useCallback` hooks with a single handler:
+Replace 15 `useCallback` hooks with a single handler:
 
 ```typescript
-const handleEvent = useCallback((type: string, payload: any) => {
-  setState(prev => eventReducer(prev, type, payload))
+const emitFrontendDebugLog = useCallback((message: string) => {
+  window.__bridge?.debugLog(message)
 }, [])
+
+const handleEvent = useCallback((type: string, payload: any) => {
+  // Debug logging side effects (preserved from original callbacks)
+  if (type === "execution_card") {
+    emitFrontendDebugLog(`[approval-ui] received execution card requestId=${payload.requestId} command=${payload.command}`)
+  } else if (type === "approval_request") {
+    emitFrontendDebugLog(`[approval-ui] received approval request requestId=${payload.requestId}`)
+  } else if (type === "execution_status") {
+    emitFrontendDebugLog(`[approval-ui] received execution status requestId=${payload.requestId} status=${payload.status}`)
+  }
+
+  setState(prev => eventReducer(prev, type, payload))
+}, [emitFrontendDebugLog])
 ```
 
-`useBridge` receives `handleEvent` instead of 13 separate callbacks.
+`useBridge` receives `handleEvent` instead of 15 separate callbacks.
 
 All other App.tsx logic (handleSend, handleKeyDown, handleNewChat, handleApprovalAllow/Deny, handleCancel) remains unchanged — they use `window.__bridge?.sendMessage()` etc. which are action methods, not event callbacks.
 
@@ -318,9 +354,9 @@ All other App.tsx logic (handleSend, handleKeyDown, handleNewChat, handleApprova
 
 | File | Change |
 |---|---|
-| `BridgeHandler.kt` | Internal rewrite of `notifyXxx` methods to use `dispatchEvent`; add `notifyRoundEnd` |
-| `useBridge.ts` | Replace 13 callback params with single `EventHandler` |
-| `App.tsx` | Replace 13 `useCallback` with single `handleEvent` + `setState` reducer |
+| `BridgeHandler.kt` | Internal rewrite of `notifyXxx` methods to use `buildEventJS`; add `notifyRoundEnd` |
+| `useBridge.ts` | Replace 15 callback params with single `EventHandler`; preserve bridge_ready lifecycle |
+| `App.tsx` | Replace 15 `useCallback` with single `handleEvent` + `setState` reducer; preserve debug log side effects |
 | New: `eventReducer.ts` | Pure function mapping events to state changes |
 | `types/bridge.d.ts` | Update `Bridge` interface |
 | `ChatService.kt` | **Zero changes** |
@@ -346,6 +382,7 @@ Key properties:
 - Each group has its own `id` (derived from `msgId` for assistant groups).
 - `assistant` group's `children` are an ordered list — execution cards and text appear in event arrival order.
 - A single assistant group spans all API rounds for one user turn (including multi-round tool calls and auto-continuations).
+- **msgId invariant**: `ChatService.kt` uses the same `msgId` (`activeMessageId`) across all API rounds within a single user turn. This means `start(msgId)` in Round 1 and `start(msgId)` in Round 2 carry the same `msgId`. The group's `id` field uses this `msgId`, and the `start` handler detects continuation rounds by checking if the last group is still streaming.
 
 ### 2.2 Event → Group Mapping: groupReducer
 
@@ -387,20 +424,31 @@ export function groupReducer(state: GroupState, type: string, payload: any): Gro
     }
 
     case "token": {
-      return updateLastAssistant(state, group => {
-        // Find or create the current round's text child
-        if (state.currentRoundTextIndex !== null && group.children[state.currentRoundTextIndex]?.kind === "text") {
-          const updated = [...group.children]
-          updated[state.currentRoundTextIndex] = {
-            ...updated[state.currentRoundTextIndex],
-            content: (updated[state.currentRoundTextIndex] as any).content + payload.text,
-          }
-          return { ...group, children: updated }
+      // Find or create the current round's text child
+      const lastGroup = state.groups[state.groups.length - 1]
+      if (lastGroup?.type !== "assistant") return state
+
+      const group = lastGroup as AssistantGroup
+      let newTextIndex = state.currentRoundTextIndex
+
+      if (newTextIndex !== null && group.children[newTextIndex]?.kind === "text") {
+        // Append to existing text child
+        const updated = [...group.children]
+        updated[newTextIndex] = {
+          ...updated[newTextIndex],
+          content: (updated[newTextIndex] as TextChild).content + payload.text,
         }
-        // Create new text child
-        const textChild: AssistantChild = { kind: "text", id: `text-${Date.now()}`, content: payload.text, isStreaming: true }
-        return { ...group, children: [...group.children, textChild] }
-      }, { currentRoundTextIndex: /* index of new/existing text child */ })
+        const groups = [...state.groups]
+        groups[groups.length - 1] = { ...group, children: updated }
+        return { ...state, groups }
+      }
+
+      // Create new text child
+      const textChild: AssistantChild = { kind: "text", id: `text-${Date.now()}`, content: payload.text, isStreaming: true }
+      newTextIndex = group.children.length  // index of the newly appended child
+      const groups = [...state.groups]
+      groups[groups.length - 1] = { ...group, children: [...group.children, textChild] }
+      return { ...state, groups, currentRoundTextIndex: newTextIndex }
     }
 
     case "execution_card": {
@@ -408,7 +456,7 @@ export function groupReducer(state: GroupState, type: string, payload: any): Gro
         ...group,
         children: [...group.children, {
           kind: "execution",
-          data: { requestId: payload.requestId, command: payload.command, status: "running", logs: [] },
+          data: { requestId: payload.requestId, command: payload.command, status: "running" as ExecutionStatus },
         }],
       }))
     }
@@ -482,17 +530,57 @@ export function groupReducer(state: GroupState, type: string, payload: any): Gro
       }))
     }
 
-    case "error":
-    case "structured_error":
-      // Same as Phase 1, but operate on groups
-      // Mark streaming groups as finalized
-      ...
+    case "error": {
+      const groups = state.groups.map(g => {
+        if (g.type === "assistant" && g.isStreaming) {
+          return {
+            ...g,
+            isStreaming: false,
+            children: g.children.map(child =>
+              child.kind === "text" ? { ...child, isStreaming: false } : child
+            ),
+          }
+        }
+        return g
+      })
+      return {
+        ...state,
+        isLoading: false,
+        continuationInfo: null,
+        currentRoundTextIndex: null,
+        groups,
+        error: { type: "runtime", message: payload.message },
+      }
+    }
+
+    case "structured_error": {
+      const groups = state.groups.map(g => {
+        if (g.type === "assistant" && g.isStreaming) {
+          return {
+            ...g,
+            isStreaming: false,
+            children: g.children.map(child =>
+              child.kind === "text" ? { ...child, isStreaming: false } : child
+            ),
+          }
+        }
+        return g
+      })
+      return {
+        ...state,
+        isLoading: false,
+        continuationInfo: null,
+        currentRoundTextIndex: null,
+        groups,
+        error: { type: payload.type, message: payload.message, action: payload.action },
+      }
+    }
 
     case "continuation":
       return { ...state, continuationInfo: { current: payload.current, max: payload.max } }
 
     case "restore_messages":
-      return { ...state, groups: restoreToGroups(payload.messages) }
+      return { ...state, groups: restoreToGroups(JSON.parse(payload.messages)) }
 
     // Non-message events pass through unchanged
     case "status":
@@ -590,6 +678,8 @@ private fun startStreamingRound(msgId: String, request: Request, toolsEnabled: B
     // ... rest unchanged
 }
 ```
+
+**Timing consideration:** Currently when tools are disabled, `notifyStart` is sent from `sendMessage()` (before the HTTP request). Moving it to `startStreamingRound()` means it fires slightly later (after the request is built). This is acceptable because the frontend creates the assistant group in response to `start`, and the delay between `sendMessage()` and `startStreamingRound()` is negligible (no network round trip — just object construction). No visible flash of empty bubble is expected.
 
 ### 2.5 Rendering
 
