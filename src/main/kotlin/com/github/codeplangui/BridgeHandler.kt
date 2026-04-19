@@ -315,7 +315,7 @@ class BridgeHandler(
     private fun buildEventJS(type: String, builderAction: JsonObjectBuilder.() -> Unit): String {
         val obj = buildJsonObject(builderAction)
         val payloadStr = obj.toString()
-        return "window.__bridge.onEvent('${type}', ${json.encodeToString(payloadStr)})"
+        return "window.__bridge.onEvent(${type.quoted()}, ${json.encodeToString(payloadStr)})"
     }
 
     /**
@@ -352,9 +352,13 @@ class BridgeHandler(
         if (flushPending.compareAndSet(false, true)) {
             flushTimer.schedule(object : TimerTask() {
                 override fun run() {
-                    flushPendingBuffer()
+                    val hasMore: Boolean
+                    synchronized(flushLock) {
+                        flushPendingBuffer()
+                        hasMore = pendingJs.isNotEmpty()
+                    }
                     flushPending.set(false)
-                    if (pendingJs.isNotEmpty()) {
+                    if (hasMore) {
                         scheduleFlush()
                     }
                 }
@@ -367,15 +371,17 @@ class BridgeHandler(
      * Called from the flush timer thread or from [flushAndPush].
      */
     internal fun flushPendingBuffer() {
+        val batch: List<String>
         synchronized(flushLock) {
-            val batch = mutableListOf<String>()
-            while (true) {
-                val item = pendingJs.poll() ?: break
-                batch.add(item)
+            batch = buildList {
+                while (true) {
+                    val item = pendingJs.poll() ?: break
+                    add(item)
+                }
             }
-            if (batch.isNotEmpty()) {
-                executeJS(batch.joinToString(";"))
-            }
+        }
+        if (batch.isNotEmpty()) {
+            executeJS(batch.joinToString(";"))
         }
     }
 
