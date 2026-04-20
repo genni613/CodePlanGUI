@@ -92,7 +92,7 @@ export function groupReducer(state: GroupState, type: string, payload: any): Gro
       if (lastGroup?.type !== 'assistant') return state
 
       const group = lastGroup as AssistantGroup
-      let newTextIndex = state.currentRoundTextIndex
+      const newTextIndex = state.currentRoundTextIndex
 
       if (newTextIndex !== null && group.children[newTextIndex]?.kind === 'text') {
         const existing = group.children[newTextIndex] as AssistantChild & { kind: 'text' }
@@ -103,11 +103,11 @@ export function groupReducer(state: GroupState, type: string, payload: any): Gro
         return { ...state, groups }
       }
 
-      const textChild: AssistantChild = { kind: 'text', id: `text-${Date.now()}`, content: payload.text, isStreaming: true }
-      newTextIndex = group.children.length
+      const textChild: AssistantChild = { kind: 'text', id: `text-${crypto.randomUUID()}`, content: payload.text, isStreaming: true }
+      const appendIndex = group.children.length
       const groups = [...state.groups]
       groups[groups.length - 1] = { ...group, children: [...group.children, textChild] }
-      return { ...state, groups, currentRoundTextIndex: newTextIndex }
+      return { ...state, groups, currentRoundTextIndex: appendIndex }
     }
 
     case 'execution_card': {
