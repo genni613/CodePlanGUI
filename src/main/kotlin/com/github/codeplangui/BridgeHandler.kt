@@ -272,6 +272,7 @@ class BridgeHandler(
         flushAndPush(buildEventJS("approval_request") {
             put("requestId", JsonPrimitive(requestId))
             put("command", JsonPrimitive(command))
+            put("toolInput", JsonPrimitive(command))
             put("description", JsonPrimitive(description))
         }).also {
             logger.info(
@@ -279,6 +280,15 @@ class BridgeHandler(
                     "requestId=$requestId command=${command.summarizeForLog()} description=${description.summarizeForLog()}"
             )
         }
+
+    fun notifyFileChangeAuto(path: String, added: Int, removed: Int) =
+        flushAndPush(buildEventJS("file_change_auto") {
+            put("path", JsonPrimitive(path))
+            put("stats", buildJsonObject {
+                put("added", JsonPrimitive(added))
+                put("removed", JsonPrimitive(removed))
+            })
+        })
 
     fun notifyExecutionStatus(requestId: String, status: String, resultJson: String) =
         flushAndPush(buildEventJS("execution_status") {
@@ -306,6 +316,24 @@ class BridgeHandler(
 
     fun notifyRoundEnd(msgId: String) =
         flushAndPush(buildEventJS("round_end") { put("msgId", JsonPrimitive(msgId)) })
+
+    fun notifyToolStepStart(msgId: String, requestId: String, toolName: String, summary: String) =
+        flushAndPush(buildEventJS("tool_step_start") {
+            put("msgId", JsonPrimitive(msgId))
+            put("requestId", JsonPrimitive(requestId))
+            put("toolName", JsonPrimitive(toolName))
+            put("summary", JsonPrimitive(summary))
+        })
+
+    fun notifyToolStepEnd(msgId: String, requestId: String, status: Boolean, output: String, durationMs: Long, diffStats: String? = null) =
+        flushAndPush(buildEventJS("tool_step_end") {
+            put("msgId", JsonPrimitive(msgId))
+            put("requestId", JsonPrimitive(requestId))
+            put("status", JsonPrimitive(status))
+            put("output", JsonPrimitive(output))
+            put("durationMs", JsonPrimitive(durationMs))
+            if (diffStats != null) put("diffStats", JsonPrimitive(diffStats))
+        })
 
     /**
      * Build a JS call that dispatches a unified event through `window.__bridge.onEvent(type, payloadJson)`.

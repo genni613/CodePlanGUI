@@ -33,7 +33,12 @@ data class SettingsState(
     var commandExecutionEnabled: Boolean = true,
     var commandWhitelist: MutableList<String> = ShellPlatform.current().defaultWhitelist().toMutableList(),
     var commandTimeoutSeconds: Int = 30,
-    var sessionTtlDays: Int = 30
+    var sessionTtlDays: Int = 30,
+    // Unified tool system settings
+    var unifiedToolsEnabled: Boolean = true,
+    var permissionMode: String = "WORKSPACE_WRITE",
+    var allowSessionFileTrust: Boolean = true,
+    var diffSummaryThreshold: Int = 100
 )
 
 @State(

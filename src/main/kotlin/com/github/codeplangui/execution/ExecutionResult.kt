@@ -35,4 +35,19 @@ sealed class ExecutionResult {
         kotlinx.serialization.json.Json.encodeToString(
             kotlinx.serialization.serializer<String>(), s
         )
+
+    /** Convert to unified ToolResult for the new tool system. */
+    fun toToolResult(): ToolResult = when (this) {
+        is Success  -> ToolResult(ok = true, output = buildString {
+            if (stdout.isNotEmpty()) append(stdout)
+            if (stderr.isNotEmpty()) {
+                if (isNotEmpty()) append("\n")
+                append(stderr)
+            }
+        }.ifEmpty { "Command completed with exit code $exitCode" })
+        is Failed   -> ToolResult(ok = false, output = stderr.ifEmpty { "Command failed with exit code $exitCode" })
+        is Blocked  -> ToolResult(ok = false, output = reason)
+        is Denied   -> ToolResult(ok = false, output = reason)
+        is TimedOut -> ToolResult(ok = false, output = "Command timed out after ${timeoutSeconds}s")
+    }
 }

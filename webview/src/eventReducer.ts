@@ -3,12 +3,24 @@ import type { BridgeError, BridgeStatus } from './types/bridge.js'
 import { parseExecutionResultPayload } from './executionStatus.js'
 import { applyBridgeStatus, applyContextFile } from './statusState.js'
 
+export interface ToolStepInfo {
+  id: string
+  toolName: string
+  targetSummary: string
+  status: 'running' | 'completed' | 'failed'
+  durationMs?: number
+  output?: string
+  diffStats?: { added: number; removed: number }
+  expanded?: boolean
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant' | 'execution'
   content: string
   isStreaming?: boolean
   execution?: ExecutionCardData
+  toolSteps?: ToolStepInfo[]
 }
 
 export interface AppState {
@@ -21,6 +33,8 @@ export interface AppState {
   approvalRequestId: string
   approvalCommand: string
   approvalDescription: string
+  approvalToolName: string
+  fileChangeAutos: Array<{ path: string; added: number; removed: number }>
   continuationInfo: { current: number; max: number } | null
 }
 
@@ -104,8 +118,9 @@ export function eventReducer(state: AppState, type: string, payload: any): AppSt
       return {
         ...state,
         approvalRequestId: payload.requestId,
-        approvalCommand: payload.command,
+        approvalCommand: payload.toolInput || payload.command,
         approvalDescription: payload.description,
+        approvalToolName: payload.toolName || '',
         approvalOpen: true,
         messages: state.messages.map(m =>
           m.id === payload.requestId
@@ -153,6 +168,58 @@ export function eventReducer(state: AppState, type: string, payload: any): AppSt
 
     case 'theme':
       return { ...state, themeMode: payload.mode }
+
+    case 'file_change_auto':
+      return {
+        ...state,
+        fileChangeAutos: [...(state.fileChangeAutos || []), {
+          path: payload.path,
+          added: payload.stats?.added ?? 0,
+          removed: payload.stats?.removed ?? 0,
+        }],
+      }
+
+    case 'tool_step_start':
+      return {
+        ...state,
+        messages: state.messages.map(m => {
+          if (m.id !== payload.msgId) return m
+          return {
+            ...m,
+            toolSteps: [
+              ...(m.toolSteps || []),
+              {
+                id: payload.requestId,
+                toolName: payload.toolName,
+                targetSummary: payload.summary,
+                status: 'running' as const,
+              }
+            ]
+          }
+        })
+      }
+
+    case 'tool_step_end':
+      return {
+        ...state,
+        messages: state.messages.map(m => {
+          if (m.id !== payload.msgId) return m
+          return {
+            ...m,
+            toolSteps: (m.toolSteps || []).map(step =>
+              step.id === payload.requestId
+                ? {
+                    ...step,
+                    status: payload.status ? 'completed' as const : 'failed' as const,
+                    output: payload.output,
+                    durationMs: payload.durationMs,
+                    diffStats: payload.diffStats ? JSON.parse(payload.diffStats) : undefined,
+                  }
+                : step
+            )
+          }
+        })
+      }
 
     default:
       return state

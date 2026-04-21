@@ -8,6 +8,7 @@ import { Marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import type { ExecutionCardData } from './ExecutionCard'
 import { ExecutionCard } from './ExecutionCard'
+import { ToolStepsBar } from './ToolStepsBar'
 import type { Message } from '../eventReducer'
 
 const marked = new Marked(
@@ -135,6 +136,9 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           <span className="assistant-bubble-label">assistant</span>
           <CopyButton text={message.content} />
         </div>
+        {message.toolSteps && message.toolSteps.length > 0 && (
+          <ToolStepsBar steps={message.toolSteps} />
+        )}
         <div ref={htmlRef} className="assistant-markdown" />
         {message.isStreaming && <span className="stream-cursor" />}
       </div>

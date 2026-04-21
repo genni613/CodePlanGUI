@@ -26,7 +26,7 @@ export interface Bridge {
   isReady: boolean
   // Single event channel (Kotlin → JS)
   onEvent: (type: string, payloadJson: string) => void
-  // Action methods (JS → Kotlin) — unchanged
+  // Action methods (JS → Kotlin)
   sendMessage: (text: string, includeContext: boolean) => void
   newChat: () => void
   openSettings: () => void
@@ -34,6 +34,7 @@ export interface Bridge {
   frontendReady: () => void
   debugLog: (text: string) => void
   approvalResponse: (requestId: string, decision: 'allow' | 'deny', addToWhitelist?: boolean) => void
+  openFile: (path: string, line?: number) => void
 }
 
 declare global {
