@@ -55,6 +55,8 @@ class BridgeHandlerDispatchTest {
 
                 override fun debugLog(text: String) = Unit
 
+                override fun openFile(path: String, line: Int) = Unit
+
                 override fun cancelStream() = Unit
             }
         )
@@ -147,6 +149,8 @@ class BridgeHandlerDispatchTest {
         override fun debugLog(text: String) {
             debugLogs += text
         }
+
+        override fun openFile(path: String, line: Int) = Unit
 
         override fun cancelStream() {
             cancelStreamCalls += 1

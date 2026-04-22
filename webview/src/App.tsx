@@ -228,7 +228,7 @@ export default function App() {
                 </div>
               )
             }
-            return <AssistantGroup key={group.id} group={group} />
+            return <AssistantGroup key={group.id} group={group} toolSteps={group.toolSteps} />
           })}
 
           {isLoading && !groups.some(g =>

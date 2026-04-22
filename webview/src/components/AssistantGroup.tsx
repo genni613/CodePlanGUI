@@ -1,9 +1,10 @@
 import { memo, useState } from 'react'
 import { CheckOutlined, CopyOutlined } from '@ant-design/icons'
 import { Button, Typography } from 'antd'
-import type { AssistantGroup as AssistantGroupType } from '../groupReducer'
+import type { AssistantGroup as AssistantGroupType, ToolStepInfo } from '../groupReducer'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { ExecutionCard } from './ExecutionCard'
+import { ToolStepsBar } from './ToolStepsBar'
 
 async function copyText(text: string): Promise<boolean> {
   if (navigator.clipboard?.writeText) {
@@ -54,11 +55,15 @@ function CopyButton({ text }: { text: string }) {
 
 interface AssistantGroupProps {
   group: AssistantGroupType
+  toolSteps?: ToolStepInfo[]
 }
 
-export const AssistantGroup = memo(function AssistantGroup({ group }: AssistantGroupProps) {
+export const AssistantGroup = memo(function AssistantGroup({ group, toolSteps }: AssistantGroupProps) {
   return (
     <div className="assistant-group">
+      {toolSteps && toolSteps.length > 0 && (
+        <ToolStepsBar steps={toolSteps} />
+      )}
       {group.children.map(child => {
         if (child.kind === 'execution') {
           return <ExecutionCard key={child.data.requestId} data={child.data} />

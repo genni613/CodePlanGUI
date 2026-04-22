@@ -3,6 +3,19 @@ import type { BridgeError, BridgeStatus } from './types/bridge.js'
 import { parseExecutionResultPayload } from './executionStatus.js'
 import { applyBridgeStatus, applyContextFile } from './statusState.js'
 
+// ─── ToolStep types ──────────────────────────────────────────────────
+
+export interface ToolStepInfo {
+  id: string
+  toolName: string
+  targetSummary: string
+  status: 'running' | 'completed' | 'failed'
+  durationMs?: number
+  output?: string
+  diffStats?: { added: number; removed: number }
+  expanded?: boolean
+}
+
 // ─── Group types ────────────────────────────────────────────────────
 
 export type AssistantChild =
@@ -10,7 +23,7 @@ export type AssistantChild =
   | { kind: 'text'; id: string; content: string; isStreaming: boolean }
 
 export type HumanGroup = { type: 'human'; id: string; message: { id: string; content: string } }
-export type AssistantGroup = { type: 'assistant'; id: string; children: AssistantChild[]; isStreaming: boolean }
+export type AssistantGroup = { type: 'assistant'; id: string; children: AssistantChild[]; isStreaming: boolean; toolSteps: ToolStepInfo[] }
 export type MessageGroup = HumanGroup | AssistantGroup
 
 // ─── State ──────────────────────────────────────────────────────────
@@ -61,7 +74,7 @@ function restoreToGroups(flat: Array<{ id: string; role: string; content: string
       if (currentAssistant) { groups.push(currentAssistant); currentAssistant = null }
       groups.push({ type: 'human', id: msg.id, message: { id: msg.id, content: msg.content } })
     } else {
-      if (!currentAssistant) currentAssistant = { type: 'assistant', id: msg.id, children: [], isStreaming: false }
+      if (!currentAssistant) currentAssistant = { type: 'assistant', id: msg.id, children: [], isStreaming: false, toolSteps: [] }
       currentAssistant.children.push({ kind: 'text', id: `text-${msg.id}`, content: msg.content, isStreaming: false })
     }
   }
@@ -76,14 +89,24 @@ export function groupReducer(state: GroupState, type: string, payload: any): Gro
     case 'start': {
       const lastGroup = state.groups[state.groups.length - 1]
       if (lastGroup?.type === 'assistant' && (lastGroup as AssistantGroup).isStreaming) {
-        return { ...state, isLoading: true, error: null, currentRoundTextIndex: null }
+        // Reuse existing group — finalize previous round's text children so they
+        // lose the streaming cursor before a new text child is created for the
+        // follow-up round.
+        const groups = [...state.groups]
+        groups[groups.length - 1] = {
+          ...(lastGroup as AssistantGroup),
+          children: (lastGroup as AssistantGroup).children.map(child =>
+            child.kind === 'text' ? { ...child, isStreaming: false } : child
+          ),
+        }
+        return { ...state, isLoading: true, error: null, currentRoundTextIndex: null, groups }
       }
       return {
         ...state,
         isLoading: true,
         error: null,
         currentRoundTextIndex: null,
-        groups: [...state.groups, { type: 'assistant', id: payload.msgId, children: [], isStreaming: true }],
+        groups: [...state.groups, { type: 'assistant', id: payload.msgId, children: [], isStreaming: true, toolSteps: [] }],
       }
     }
 
@@ -173,6 +196,35 @@ export function groupReducer(state: GroupState, type: string, payload: any): Gro
       return state
     }
 
+    case 'tool_step_start': {
+      return updateLastAssistant(state, group => ({
+        ...group,
+        toolSteps: [...group.toolSteps, {
+          id: payload.requestId,
+          toolName: payload.toolName,
+          targetSummary: payload.summary,
+          status: 'running' as const,
+        }],
+      }))
+    }
+
+    case 'tool_step_end': {
+      return updateLastAssistant(state, group => ({
+        ...group,
+        toolSteps: group.toolSteps.map(step =>
+          step.id === payload.requestId
+            ? {
+                ...step,
+                status: payload.status ? 'completed' as const : 'failed' as const,
+                output: payload.output,
+                durationMs: payload.durationMs,
+                diffStats: payload.diffStats,
+              }
+            : step
+        ),
+      }))
+    }
+
     case 'end': {
       return updateLastAssistant({
         ...state,
@@ -236,6 +288,16 @@ export function groupReducer(state: GroupState, type: string, payload: any): Gro
 
     case 'continuation':
       return { ...state, continuationInfo: { current: payload.current, max: payload.max } }
+
+    case 'file_change_auto':
+      return {
+        ...state,
+        fileChangeAutos: [...(state.fileChangeAutos || []), {
+          path: payload.path,
+          added: payload.stats?.added ?? 0,
+          removed: payload.stats?.removed ?? 0,
+        }],
+      }
 
     case 'restore_messages':
       return { ...state, groups: restoreToGroups(JSON.parse(payload.messages)) }

@@ -28,7 +28,9 @@ private data class BridgePayload(
     val decision: String = "",
     val addToWhitelist: Boolean = false,
     val current: Int = 0,
-    val max: Int = 0
+    val max: Int = 0,
+    val path: String = "",
+    val line: Int = 0
 )
 
 internal interface BridgeCommands {
@@ -37,6 +39,7 @@ internal interface BridgeCommands {
     fun openSettings()
     fun onFrontendReady()
     fun approvalResponse(requestId: String, decision: String, addToWhitelist: Boolean)
+    fun openFile(path: String, line: Int)
     fun debugLog(text: String)
     fun cancelStream()
 }
@@ -48,6 +51,8 @@ internal fun dispatchBridgeRequest(
     requestId: String = "",
     decision: String = "",
     addToWhitelist: Boolean = false,
+    path: String = "",
+    line: Int = 0,
     commands: BridgeCommands
 ) {
     when (type) {
@@ -56,6 +61,7 @@ internal fun dispatchBridgeRequest(
         "openSettings"     -> commands.openSettings()
         "frontendReady"    -> commands.onFrontendReady()
         "approvalResponse" -> commands.approvalResponse(requestId, decision, addToWhitelist)
+        "openFile"         -> commands.openFile(path, line)
         "debugLog"         -> commands.debugLog(text)
         "cancelStream"     -> commands.cancelStream()
     }
@@ -79,7 +85,7 @@ internal fun handleBridgePayload(
     }
 
     return try {
-        dispatchBridgeRequest(req.type, req.text, req.includeContext, req.requestId, req.decision, req.addToWhitelist, commands)
+        dispatchBridgeRequest(req.type, req.text, req.includeContext, req.requestId, req.decision, req.addToWhitelist, req.path, req.line, commands)
         BridgePayloadHandlingResult.Success
     } catch (e: Exception) {
         BridgePayloadHandlingResult.CommandError(
@@ -147,6 +153,10 @@ class BridgeHandler(
                         logger.info("[CodePlanGUI Frontend] $text")
                     }
 
+                    override fun openFile(path: String, line: Int) {
+                        chatService.openFile(path, line)
+                    }
+
                     override fun cancelStream() {
                         chatService.cancelStream()
                     }
@@ -189,6 +199,9 @@ class BridgeHandler(
                             },
                             approvalResponse: function(requestId, decision, addToWhitelist) {
                                 ${sendQuery.inject("""JSON.stringify({type:'approvalResponse',text:'',requestId:requestId,decision:decision,addToWhitelist:!!addToWhitelist})""")}
+                            },
+                            openFile: function(path, line) {
+                                ${sendQuery.inject("""JSON.stringify({type:'openFile',text:'',path:path,line:line||0})""")}
                             },
                             debugLog: function(text) {
                                 ${sendQuery.inject("""JSON.stringify({type:'debugLog',text:text})""")}

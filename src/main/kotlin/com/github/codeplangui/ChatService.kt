@@ -8,6 +8,13 @@ import com.github.codeplangui.api.TruncationDecision
 import com.github.codeplangui.api.TruncationHandler
 import com.github.codeplangui.execution.CommandExecutionService
 import com.github.codeplangui.execution.ExecutionResult
+<<<<<<< Updated upstream
+=======
+import com.github.codeplangui.execution.FileChangeReview
+import com.github.codeplangui.execution.InlineChangeHighlighter
+import com.github.codeplangui.execution.FileWriteLock
+import com.github.codeplangui.execution.PendingToolCall
+>>>>>>> Stashed changes
 import com.github.codeplangui.execution.ShellPlatform
 import com.github.codeplangui.model.ChatSession
 import com.github.codeplangui.model.Message
@@ -72,9 +79,27 @@ class ChatService(private val project: Project) : Disposable {
     private val pendingApprovals = ConcurrentHashMap<String, CompletableFuture<Boolean>>()
     private val pendingApprovalCommands = ConcurrentHashMap<String, String>()
 
+<<<<<<< Updated upstream
     // NOTE: bridgeNotifiedStart removed in Phase 2 — notifyStart is now sent
     // unconditionally at the start of each streaming round, and round_end replaces
     // the old remove_message hack for discarding intermediate tokens.
+=======
+    // Unified tool system (new)
+    private val toolRegistry = ToolRegistry(this)
+    private val fileChangeReview = FileChangeReview()
+    private val fileWriteLock = FileWriteLock()
+    private val inlineChangeHighlighter = InlineChangeHighlighter(project)
+    private val dispatcher = ToolCallDispatcher(toolRegistry, fileChangeReview, fileWriteLock, project).also {
+        it.addHook(ToolExecutionLogger())
+        // Register built-in tools
+        toolRegistry.addTools(ToolSpecs(fileChangeReview, inlineChangeHighlighter).allSpecs())
+    }
+
+    // Tracks which msgIds have had notifyStart sent to the frontend
+    // When tools are enabled, notifyStart is deferred until the final response round
+    // so ExecutionCards appear before the assistant bubble
+    private val bridgeNotifiedStart = mutableSetOf<String>()
+>>>>>>> Stashed changes
 
     fun attachBridge(handler: BridgeHandler) {
         bridgeHandler = handler
@@ -228,6 +253,24 @@ class ChatService(private val project: Project) : Disposable {
                 }
             }
         )
+    }
+
+    fun openFile(path: String, line: Int = 0) {
+        val basePath = project.basePath ?: return
+        val absolutePath = if (java.io.File(path).isAbsolute) path else "$basePath/$path"
+        val file = java.io.File(absolutePath)
+        if (!file.exists()) {
+            logger.warn("[CodePlanGUI] openFile: file not found: $absolutePath")
+            return
+        }
+        ApplicationManager.getApplication().invokeLater {
+            val vf = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
+            if (vf != null) {
+                val lineIndex = if (line > 0) line - 1 else 0
+                val descriptor = com.intellij.openapi.fileEditor.OpenFileDescriptor(project, vf, lineIndex, 0)
+                FileEditorManager.getInstance(project).openTextEditor(descriptor, true)
+            }
+        }
     }
 
     fun onApprovalResponse(requestId: String, decision: String, addToWhitelist: Boolean = false) {
